@@ -49,8 +49,7 @@ export function RunStatus({ initial, canRun }: { initial: Status; canRun: boolea
       <div className="anim-rise mb-6 w-full rounded-2xl border border-brand-2/25 bg-white/90 px-4 py-3.5 shadow-[0_12px_32px_-22px_rgba(0,163,140,0.55)] backdrop-blur" role="status" aria-live="polite">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.07em] text-ink-2">
-              <span className="live-dot h-2 w-2 rounded-full bg-brand-2" />
+            <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.07em] text-ink-2">
               {t('Tracking', 'Midiendo')}
             </span>
             <span className="truncate text-[13px] font-semibold text-ink-2 num">

@@ -33,6 +33,16 @@ export async function register() {
       busy = false
     }
   }
+  // Tras un despliegue, las mediciones que el reinicio cortó se completan solas.
+  setTimeout(async () => {
+    try {
+      const { resumeInterrupted } = await import('./lib/tracking')
+      const ws = resumeInterrupted()
+      if (ws.length) console.log(`[placton] mediciones reanudadas tras reiniciar: ${ws.join(', ')}`)
+    } catch (err) {
+      console.error('[placton] reanudar', err)
+    }
+  }, 5_000).unref()
   // unref: los temporizadores no mantienen vivo un proceso que quiere terminar.
   setTimeout(tick, 60_000).unref()
   setInterval(tick, 60 * 60 * 1000).unref()

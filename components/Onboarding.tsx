@@ -9,7 +9,7 @@ import { PLANS } from '@/lib/plans'
 const TRIAL_LIMIT = PLANS.trial.prompts
 import { useT } from './LangProvider'
 import { IconArrow, IconPrompt, IconSearch, IconX } from './icons'
-import { BrandAvatar, cx } from './ui'
+import { BrandAvatar, PlatformDot, cx } from './ui'
 
 // Alta en cuatro pantallas, una cada vez: web → competidores → prompts →
 // preparando el panel. Cada pantalla tiene su estado de carga dentro de la
@@ -396,64 +396,160 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
   )
 }
 
-const PLATFORM_NAMES = ['ChatGPT', 'Claude', 'Google AI', 'Perplexity', 'Grok']
+const ENGINE_IDS = ['chatgpt', 'claude', 'google', 'perplexity', 'grok'] as const
+const ENGINE_NAMES: Record<string, string> = { chatgpt: 'ChatGPT', claude: 'Claude', google: 'Google AI', perplexity: 'Perplexity', grok: 'Grok' }
 
-/** Paso 4: progreso real de la primera medición; entra al panel en cuanto hay datos. */
+interface LiveAnswer {
+  id: number
+  engine: string
+  prompt: string
+  brands: number
+  own: boolean
+  cites: number
+}
+
+/** Número que sube poco a poco hasta su valor (sin saltos bruscos). */
+function useCountUp(target: number) {
+  const [value, setValue] = useState(0)
+  useEffect(() => {
+    let raf = 0
+    const tick = () => {
+      setValue((v) => {
+        if (v >= target) return target
+        const next = v + Math.max(1, Math.ceil((target - v) / 8))
+        if (next < target) raf = requestAnimationFrame(tick)
+        return Math.min(next, target)
+      })
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target])
+  return value
+}
+
+/**
+ * Paso 4: la primera medición en directo. Las cinco IA se iluminan según van
+ * contestando, el contador sube y entran las últimas respuestas reales con las
+ * marcas que nombran. Entra al panel en cuanto hay una primera tanda.
+ */
 function Setup({ onDone }: { onDone: () => void }) {
   const t = useT()
-  const [progress, setProgress] = useState({ done: 0, total: 1 })
-  const [tick, setTick] = useState(0)
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
+  const [byEngine, setByEngine] = useState<Record<string, number>>({})
+  const [recent, setRecent] = useState<LiveAnswer[]>([])
   const started = useRef(Date.now())
   const leaving = useRef(false)
 
   useEffect(() => {
-    const iv = setInterval(async () => {
-      setTick((n) => n + 1)
+    const poll = async () => {
       try {
         const res = await fetch('/api/run-status', { cache: 'no-store' })
-        const data = (await res.json()) as { active: { done: number; total: number } | null }
+        const data = (await res.json()) as { active: { done: number; total: number } | null; byEngine?: Record<string, number>; recent?: LiveAnswer[] }
         const elapsed = Date.now() - started.current
         if (data.active) setProgress({ done: data.active.done, total: data.active.total })
-        // Al panel en cuanto hay una primera tanda de respuestas, la medición
-        // termina o ha pasado un minuto: el panel sigue enseñando el progreso.
-        const enough = data.active ? data.active.done >= Math.min(data.active.total, 8) : elapsed > 4000
-        if (!leaving.current && (enough || elapsed > 60_000)) {
+        if (data.byEngine) setByEngine(data.byEngine)
+        if (data.recent) setRecent(data.recent)
+        // Al panel con una primera tanda (12 respuestas), al terminar o al minuto y medio.
+        const enough = data.active ? data.active.done >= Math.min(data.active.total, 12) : elapsed > 5000
+        if (!leaving.current && (enough || elapsed > 90_000)) {
           leaving.current = true
-          setProgress((p) => ({ ...p, done: p.total }))
-          setTimeout(onDone, 700)
+          setProgress((p) => ({ ...p, done: Math.max(p.done, p.total) }))
+          setTimeout(onDone, 1200)
         }
       } catch {}
-    }, 2000)
+    }
+    void poll()
+    const iv = setInterval(poll, 1500)
     return () => clearInterval(iv)
   }, [onDone])
 
-  const shown = Math.max(0.04, Math.min(1, progress.done / Math.max(1, Math.min(progress.total, 8))))
-  const platform = PLATFORM_NAMES[tick % PLATFORM_NAMES.length]
+  const shown = useCountUp(progress.done)
+  const pct = progress.total ? Math.min(100, (progress.done / progress.total) * 100) : 4
+  const current = recent[0]?.engine
 
   return (
     <div className="flex min-h-[62vh] flex-col items-center justify-center">
-      <div className="anim-rise h-2 w-full max-w-[320px] overflow-hidden rounded-full bg-white/80 shadow-inner">
-        <div
-          className="indeterminate h-full rounded-full bg-gradient-to-r from-brand-2 to-[#2a78d6] transition-[width] duration-700"
-          style={{ width: `${Math.round(shown * 100)}%` }}
-        />
+      {/* Las cinco IA: se encienden al contestar; la última que ha contestado late */}
+      <div className="anim-rise flex items-center gap-3 sm:gap-4" aria-hidden="true">
+        {ENGINE_IDS.map((id) => {
+          const n = byEngine[id] ?? 0
+          const live = current === id
+          return (
+            <div key={id} className="relative flex flex-col items-center gap-2">
+              <span className={cx('relative rounded-full transition-all duration-500', n ? 'opacity-100' : 'opacity-35 grayscale')}>
+                {live && <span className="absolute -inset-1.5 animate-ping rounded-full border border-brand-2/40 motion-reduce:animate-none" />}
+                <span className={cx('block rounded-full ring-4 transition-all duration-500', live ? 'ring-brand-2/20' : 'ring-transparent')}>
+                  <PlatformDot id={id} size={44} />
+                </span>
+              </span>
+              <span className={cx('text-[11.5px] font-bold num transition-colors', n ? 'text-ink' : 'text-faint')}>{n || '·'}</span>
+            </div>
+          )
+        })}
       </div>
+
       <div className="mt-8">
         <Heading
           k="setup"
           title={t('Preparing your dashboard', 'Preparando tu panel')}
-          sub={t(`Asking ${platform}…`, `Preguntando a ${platform}…`)}
+          sub={
+            progress.total
+              ? t(`${shown} of ${progress.total} answers in`, `${shown} de ${progress.total} respuestas recibidas`)
+              : t('Sending your prompts to the AI platforms…', 'Enviando tus prompts a las IA…')
+          }
         />
       </div>
-      <div className="anim-rise mt-10 w-full max-w-[560px] rounded-[26px] border border-white bg-white/90 px-7 py-6 shadow-[0_24px_60px_-30px_rgba(11,29,33,0.35)]" style={{ '--i': 2 } as React.CSSProperties}>
-        <h2 className="text-[16px] font-bold text-ink">{t("What's happening now", 'Qué está pasando ahora')}</h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-mute">
-          {t(
-            "Each prompt is going out to every AI platform. As the answers arrive we read which brands are named, in what order and which pages are cited. You'll land on your dashboard in a moment, and you can add more competitors and prompts whenever you like.",
-            'Cada prompt se está enviando a todas las IA. Según llegan las respuestas leemos qué marcas se nombran, en qué orden y qué páginas se citan. En un momento entras en tu panel, y podrás añadir más competidores y prompts cuando quieras.',
-          )}
-        </p>
+
+      <div className="anim-rise mt-6 h-1.5 w-full max-w-[420px] overflow-hidden rounded-full bg-white/80" style={{ '--i': 1 } as React.CSSProperties}>
+        <div className="sheen h-full rounded-full bg-brand-2 transition-[width] duration-700 ease-out" style={{ width: `${pct}%` }} />
       </div>
+
+      {/* Respuestas en directo */}
+      <div className="anim-rise mt-8 w-full max-w-[560px] overflow-hidden rounded-[22px] border border-white bg-white/90 shadow-[0_24px_60px_-30px_rgba(11,29,33,0.35)]" style={{ '--i': 2 } as React.CSSProperties}>
+        <div className="flex items-center justify-between border-b border-line-2 px-5 py-3.5">
+          <span className="text-[14px] font-bold text-ink">{t('Live answers', 'Respuestas en directo')}</span>
+          <span className="text-[12px] font-semibold text-mute">{t('Live', 'En directo')}</span>
+        </div>
+        <ul className="divide-y divide-line-2">
+          {recent.length ? (
+            recent.map((a) => (
+              <li key={a.id} className="anim-rise flex items-center gap-3 px-5 py-3">
+                <PlatformDot id={a.engine} size={24} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13.5px] font-semibold text-ink">{a.prompt}</span>
+                  <span className="block text-[12px] text-mute">
+                    {ENGINE_NAMES[a.engine] ?? a.engine} · {a.cites === 1 ? t('1 source', '1 fuente') : t(`${a.cites} sources`, `${a.cites} fuentes`)}
+                  </span>
+                </span>
+                {a.own ? (
+                  <span className="shrink-0 rounded-md bg-deep px-2 py-0.5 text-[11.5px] font-bold text-white">{t('You appear', 'Sales')}</span>
+                ) : (
+                  <span className="shrink-0 rounded-md bg-line-2 px-2 py-0.5 text-[11.5px] font-semibold text-ink-2 num">
+                    {a.brands === 1 ? t('1 brand', '1 marca') : t(`${a.brands} brands`, `${a.brands} marcas`)}
+                  </span>
+                )}
+              </li>
+            ))
+          ) : (
+            [0, 1, 2].map((i) => (
+              <li key={i} className="flex items-center gap-3 px-5 py-3.5">
+                <span className="skeleton h-6 w-6 rounded-full" />
+                <span className="flex-1 space-y-1.5">
+                  <span className="skeleton block h-3 w-4/5" />
+                  <span className="skeleton block h-2.5 w-1/3" />
+                </span>
+              </li>
+            ))
+          )}
+        </ul>
+      </div>
+
+      <p className="anim-fade mt-5 max-w-[520px] text-center text-[13px] leading-relaxed text-mute" style={{ '--i': 3 } as React.CSSProperties}>
+        {t(
+          "Each prompt goes to every AI platform, which searches the web just like it does for a real user. We read which brands are named, in what order and which pages are cited. You'll land on your dashboard in a moment.",
+          'Cada prompt va a todas las IA, que buscan en internet igual que para una persona. Leemos qué marcas se nombran, en qué orden y qué páginas se citan. En un momento entras en tu panel.',
+        )}
+      </p>
     </div>
   )
 }

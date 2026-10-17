@@ -33,6 +33,29 @@ export function activeRun(workspaceId: number): Run | null {
   return r
 }
 
+/**
+ * Al arrancar el servidor (cada despliegue) ninguna medición puede seguir en
+ * marcha: las que estaban «corriendo» se cortaron. Se marcan como interrumpidas
+ * y se relanzan para completar lo que faltase (la ventana semanal evita repetir).
+ */
+export function resumeInterrupted(): number[] {
+  const cut = all<{ id: number; workspaceId: number; trigger: Run['trigger'] }>("SELECT id, workspaceId, trigger FROM runs WHERE status = 'corriendo'")
+  const recent = all<{ id: number; workspaceId: number; trigger: Run['trigger'] }>(
+    "SELECT id, workspaceId, trigger FROM runs WHERE status = 'error' AND error = 'Interrumpida' AND finishedAt > ?",
+    [new Date(Date.now() - 6 * 3_600_000).toISOString()],
+  )
+  for (const r of cut) run("UPDATE runs SET status = 'error', error = 'Interrumpida', finishedAt = ? WHERE id = ?", [nowIso(), r.id])
+  const resumed: number[] = []
+  const seen = new Set<number>()
+  for (const r of [...cut, ...recent]) {
+    if (seen.has(r.workspaceId)) continue
+    seen.add(r.workspaceId)
+    const { runId } = startRun(r.workspaceId, r.trigger)
+    if (runId) resumed.push(r.workspaceId)
+  }
+  return resumed
+}
+
 export function lastRun(workspaceId: number): Run | null {
   return one<Run>('SELECT * FROM runs WHERE workspaceId = ? ORDER BY id DESC LIMIT 1', [workspaceId])
 }
