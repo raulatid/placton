@@ -90,8 +90,9 @@ export const PAID_PLANS: Exclude<PaidPlanId, 'agencia'>[] = ['inicial', 'crecimi
 /* ───────────── Plan Agencia: clientes + bolsa de prompts ─────────────
    La agencia elige cuántas marcas cliente sigue y cuántos prompts quiere medir
    al día EN TOTAL (una bolsa que reparte entre sus clientes como quiera).
-   Precio = clientes × cuota por cliente + prompts × precio por prompt, con el
-   precio por prompt bajando por tramos de volumen. Todo configurable aquí. */
+   Precio = clientes × cuota por cliente + prompts por tramos: cada tramo se cobra
+   a su precio (los primeros 250 a 1,60 $, del 251 al 1.000 a 1,30 $…), así que
+   añadir prompts nunca abarata el total. Todo configurable aquí. */
 
 export const AGENCY_MIN = 3
 export const AGENCY_MAX = 100
@@ -102,7 +103,7 @@ export const AGENCY_PROMPTS_STEP = 25
 /** Cuota mensual por marca cliente (espacio, competidores, informes). */
 export const AGENCY_CLIENT_MONTHLY = 15
 
-/** Precio mensual por prompt medido cada semana, por tramos de volumen. */
+/** Precio mensual por prompt medido cada semana, por tramos (cada tramo a su precio). */
 export const AGENCY_PROMPT_TIERS: { upTo: number | null; monthly: number }[] = [
   { upTo: 250, monthly: 1.6 },
   { upTo: 1000, monthly: 1.3 },
@@ -116,6 +117,7 @@ function periodPrice(monthly: number, interval: Interval): number {
   return interval === 'year' ? Math.round(monthly * 12 * (1 - YEARLY_DISCOUNT) * 100) / 100 : monthly
 }
 
+/** Precio al mes del prompt número `prompts` (el del tramo en el que cae). */
 export function agencyPromptMonthly(prompts: number): number {
   return (AGENCY_PROMPT_TIERS.find((t) => t.upTo === null || prompts <= t.upTo) ?? AGENCY_PROMPT_TIERS[AGENCY_PROMPT_TIERS.length - 1]).monthly
 }
@@ -146,9 +148,20 @@ export function agencyQuote(clients: number, prompts: number, interval: Interval
   const c = clampClients(clients)
   const p = clampPrompts(prompts)
   const clientUnit = periodPrice(AGENCY_CLIENT_MONTHLY, interval)
-  const promptUnit = periodPrice(agencyPromptMonthly(p), interval)
+  // Por tramos: cada tramo a su precio (igual que el precio «graduated» de Stripe).
+  let promptsTotal = 0
+  let from = 0
+  for (const tier of AGENCY_PROMPT_TIERS) {
+    const to = tier.upTo ?? Infinity
+    const n = Math.max(0, Math.min(p, to) - from)
+    promptsTotal += n * periodPrice(tier.monthly, interval)
+    from = to
+    if (p <= to) break
+  }
+  promptsTotal = Math.round(promptsTotal * 100) / 100
+  /** Precio medio por prompt (para enseñarlo). */
+  const promptUnit = Math.round((promptsTotal / p) * 10000) / 10000
   const clientsTotal = Math.round(clientUnit * c * 100) / 100
-  const promptsTotal = Math.round(promptUnit * p * 100) / 100
   const total = Math.round((clientsTotal + promptsTotal) * 100) / 100
   return { clients: c, prompts: p, clientUnit, promptUnit, clientsTotal, promptsTotal, total, perMonth: interval === 'year' ? Math.round((total / 12) * 100) / 100 : total }
 }

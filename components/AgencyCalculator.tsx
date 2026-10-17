@@ -147,11 +147,11 @@ export function AgencyCalculator({
               ))}
             </ul>
             <div className="mt-6 rounded-2xl border border-line bg-[#f7faf9] p-4 text-[12.5px] text-mute">
-              <div className="mb-1.5 font-bold text-ink-2">{t('Price per prompt, by volume', 'Precio por prompt, según volumen')}</div>
+              <div className="mb-1.5 font-bold text-ink-2">{t('Price per prompt, by tier', 'Precio por prompt, por tramos')}</div>
               {AGENCY_PROMPT_TIERS.map((tier, i) => {
                 const from = i === 0 ? AGENCY_PROMPTS_MIN : (AGENCY_PROMPT_TIERS[i - 1].upTo ?? 0) + 1
                 return (
-                  <div key={i} className={cx('flex justify-between py-0.5 num', tier.monthly === perPromptMonth && 'font-bold text-brand')}>
+                  <div key={i} className={cx('flex justify-between py-0.5 num', prompts >= from && 'font-semibold text-ink-2', tier.monthly === perPromptMonth && 'font-bold text-brand')}>
                     <span>{tier.upTo ? `${from.toLocaleString(loc)}–${tier.upTo.toLocaleString(loc)}` : t(`${from.toLocaleString(loc)} or more`, `${from.toLocaleString(loc)} o más`)}</span>
                     <span>
                       {money(tier.monthly, lang)} {t('/ prompt / month', '/ prompt / mes')}
@@ -159,6 +159,7 @@ export function AgencyCalculator({
                   </div>
                 )
               })}
+              <div className="mt-1 text-[11.5px] text-faint">{t('Each tier is billed at its own price.', 'Cada tramo se cobra a su precio.')}</div>
               <div className="mt-1.5 flex justify-between border-t border-line pt-1.5 num">
                 <span>{t('Each client brand', 'Cada marca cliente')}</span>
                 <span>
@@ -230,7 +231,8 @@ export function AgencyCalculator({
               </div>
               <div className="flex justify-between num">
                 <span>
-                  {prompts.toLocaleString(loc)} {t('prompts', 'prompts')} × {money(monthlyView(q.promptUnit), lang)}
+                  {prompts.toLocaleString(loc)} {t('prompts', 'prompts')}{' '}
+                  <span className="text-faint">({t(`avg. ${money(monthlyView(q.promptUnit), lang)}`, `media ${money(monthlyView(q.promptUnit), lang)}`)})</span>
                 </span>
                 <span className="font-semibold text-ink">{money(monthlyView(q.promptsTotal), lang)}</span>
               </div>
@@ -247,8 +249,8 @@ export function AgencyCalculator({
           <p className="mt-2 h-5 text-[12.5px] text-mute">
             {nextFrom
               ? t(
-                  `From ${nextFrom.toLocaleString(loc)} prompts each one costs ${money(agencyPromptMonthly(nextFrom), lang)} a month.`,
-                  `Desde ${nextFrom.toLocaleString(loc)} prompts cada uno cuesta ${money(agencyPromptMonthly(nextFrom), lang)} al mes.`,
+                  `Prompts from number ${nextFrom.toLocaleString(loc)} on cost ${money(agencyPromptMonthly(nextFrom), lang)} a month each.`,
+                  `Los prompts a partir del ${nextFrom.toLocaleString(loc)} cuestan ${money(agencyPromptMonthly(nextFrom), lang)} al mes cada uno.`,
                 )
               : t('Best price per prompt.', 'El mejor precio por prompt.')}
           </p>

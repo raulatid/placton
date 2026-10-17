@@ -75,7 +75,8 @@ export async function ensurePrice(plan: PaidPlanId, interval: Interval): Promise
 
 /** Agencia: precio por prompt medido cada semana, con tramos de volumen. */
 export async function ensureAgencyPromptPrice(interval: Interval): Promise<string> {
-  const lk = `placton_agencia_prompts_${interval}_${CURRENCY}`
+  // Precio por tramos (graduated): cada tramo a su precio, sin saltos al cambiar de tramo.
+  const lk = `placton_agencia_prompts_grad_${interval}_${CURRENCY}`
   const cached = priceCache.get(lk)
   if (cached) return cached
   const s = stripe()
@@ -96,7 +97,7 @@ export async function ensureAgencyPromptPrice(interval: Interval): Promise<strin
     product: product.id,
     currency: CURRENCY,
     billing_scheme: 'tiered',
-    tiers_mode: 'volume',
+    tiers_mode: 'graduated',
     tiers: AGENCY_PROMPT_TIERS.map((t) => ({
       up_to: t.upTo ?? 'inf',
       unit_amount: interval === 'year' ? yearly(t.monthly) : Math.round(t.monthly * 100),
