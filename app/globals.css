@@ -476,3 +476,11 @@ details > summary::-webkit-details-marker {
 .pill-field:focus-within {
   box-shadow: 0 0 0 4px rgba(0, 163, 140, 0.14);
 }
+
+/* Zonas que se deslizan en horizontal sin barra visible (hay flechas y bordes difuminados) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { AuthCard } from '@/components/AuthCard'
 import { LoginForm } from '@/components/AuthForms'
-import { currentUser } from '@/lib/auth'
+import { currentUser, safeNext } from '@/lib/auth'
 import { googleReady } from '@/lib/google'
 import { getT } from '@/lib/i18n'
 
@@ -11,10 +11,11 @@ export async function generateMetadata() {
   return { title: t('Log in', 'Entrar') }
 }
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ invite?: string; error?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ invite?: string; error?: string; next?: string }> }) {
   const { invite, error } = await searchParams
+  const next = safeNext((await searchParams).next) ?? undefined
   const { t } = await getT()
-  if (await currentUser()) redirect(invite ? `/invite/${encodeURIComponent(invite)}` : '/dashboard')
+  if (await currentUser()) redirect(invite ? `/invite/${encodeURIComponent(invite)}` : (next ?? '/dashboard'))
   return (
     <AuthCard
       title={t('Welcome back', 'Hola de nuevo')}
@@ -30,7 +31,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       {error && <p className="mb-4 rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink-2 shadow-[inset_3px_0_0_#c2410c]">{error === 'limit'
             ? t('Too many new accounts from this connection today. Try again tomorrow or contact us.', 'Demasiadas cuentas nuevas desde esta conexión hoy. Prueba mañana o escríbenos.')
             : t('Google sign-in failed. Please try again.', 'No se pudo entrar con Google. Inténtalo otra vez.')}</p>}
-      <LoginForm google={googleReady()} invite={invite} />
+      <LoginForm google={googleReady()} invite={invite} next={next} />
     </AuthCard>
   )
 }

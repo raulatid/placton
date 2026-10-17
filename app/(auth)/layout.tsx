@@ -1,3 +1,4 @@
+import { Analytics } from '@/components/marketing/Analytics'
 import { Track } from '@/components/marketing/Track'
 import Link from 'next/link'
 import { LangSwitch } from '@/components/LangSwitch'
@@ -38,7 +39,8 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         </nav>
       </header>
       <main className="flex flex-1 flex-col items-center px-4 pb-10 pt-6 sm:pt-12">{children}
-        <Track /></main>
+        <Track />
+      <Analytics /></main>
       <footer className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 pb-8 text-[13px] font-semibold text-mute">
         {links.map((l) => (
           <Link key={l.href} href={l.href} className="hover:text-ink">

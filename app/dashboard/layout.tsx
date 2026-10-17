@@ -4,6 +4,7 @@ import { getT } from '@/lib/i18n'
 import { unreadInsights } from '@/lib/insights'
 import { planName } from '@/lib/plans'
 import * as repo from '@/lib/repo'
+import { workspaceLogoUrl } from '@/lib/workspaceLogo'
 import { logoutAction } from '../(auth)/actions'
 import { switchWorkspaceAction } from './actions'
 
@@ -45,12 +46,13 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   return (
     <Shell
       user={{ name: repo.displayName(user), email: user.email }}
-      workspace={{ id: ws.id, name: ws.name, domain: ws.domain }}
+      workspace={{ id: ws.id, name: ws.name, domain: ws.domain, logo: workspaceLogoUrl(ws) }}
       spaces={repo.workspacesOf(user.id).filter((w) => w.onboarded).map((w) => ({ id: w.id, name: w.name, domain: w.domain }))}
       agency={(() => {
         const owner = repo.agencyOwnerOf(ws)
         return owner ? { used: repo.agencyClients(owner.id).length, seats: owner.seats } : null
       })()}
+      canCreateSpace={repo.canCreateWorkspace(user.id)}
       plan={{ ...plan, used, limit }}
       unreadIdeas={unreadInsights(ws.id)}
       admin={isAdminEmail(user.email)}

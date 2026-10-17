@@ -1,6 +1,6 @@
 import 'server-only'
 import { resolve4 } from 'node:dns/promises'
-import { all, nowIso, run } from './db'
+import { all, nowIso, one, run, today } from './db'
 import { appUrl, sendEmail } from './email'
 import { reportError } from './monitor'
 import * as repo from './repo'
@@ -27,6 +27,43 @@ export async function runLifecycle() {
     await fillMissingDomains()
   } catch (err) {
     reportError(err, 'lifecycle:webs de competidores')
+  }
+  try {
+    await costSnapshots()
+  } catch (err) {
+    reportError(err, 'lifecycle:gasto')
+  }
+}
+
+/**
+ * Foto del gasto real cada hora: lo acumulado por la clave de OpenRouter (la
+ * diferencia entre días es el gasto real de cada día, para el panel de
+ * administración) y el saldo de DataForSEO, con un aviso al día si baja de 10 $
+ * (sin saldo, la medición de Google AI se queda sin datos).
+ */
+async function costSnapshots() {
+  const { dataForSeoBalance, openRouterData } = await import('./admin/external')
+  const day = today()
+  const save = (source: string, value: number) =>
+    run('INSERT INTO cost_snapshots (day, source, value, updatedAt) VALUES (?, ?, ?, ?) ON CONFLICT (day, source) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt', [day, source, value, nowIso()])
+  const or = await openRouterData(true)
+  if (or) save('openrouter', or.total)
+  const dfs = await dataForSeoBalance(true)
+  if (!dfs) return
+  save('dataforseo', dfs.balance)
+  const LOW = Number(process.env.PLACTON_DATAFORSEO_LOW || 10)
+  if (dfs.balance >= LOW || one('SELECT 1 AS x FROM cost_snapshots WHERE day = ? AND source = ?', [day, 'aviso-dataforseo'])) return
+  save('aviso-dataforseo', dfs.balance)
+  for (const to of (process.env.PLACTON_ADMIN_EMAILS ?? '').split(',').map((s) => s.trim()).filter(Boolean)) {
+    await sendEmail({
+      to,
+      subject: `Placton: saldo bajo en DataForSEO (${dfs.balance.toFixed(2)} $)`,
+      kind: 'aviso-saldo',
+      title: 'Queda poco saldo en DataForSEO',
+      body: `Quedan ${dfs.balance.toFixed(2)} $. Sin saldo, la medición de Google AI Overviews se queda sin datos. Recarga en app.dataforseo.com.`,
+      cta: { label: 'Ver el panel de administración', url: `${appUrl()}/admin` },
+      lang: 'es',
+    })
   }
 }
 

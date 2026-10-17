@@ -11,6 +11,7 @@ import {
   endSession,
   hashPassword,
   passwordProblem,
+  safeNext,
   startSession,
   verifyPassword,
 } from '@/lib/auth'
@@ -101,7 +102,7 @@ export async function loginAction(_: FormState, fd: FormData): Promise<FormState
   }
   await startSession(user.id)
   if (invite) redirect(`/invite/${encodeURIComponent(invite)}`)
-  redirect('/dashboard')
+  redirect(safeNext(str(fd, 'next')) ?? '/dashboard')
 }
 
 export async function logoutAction() {

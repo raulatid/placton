@@ -5,7 +5,7 @@ import { canManage, requireCtx } from '@/lib/auth'
 import { getT, pick } from '@/lib/i18n'
 import { agencyQuote, euros, planName, PLANS, priceFor } from '@/lib/plans'
 import * as repo from '@/lib/repo'
-import { confirmCheckout, stripeMode } from '@/lib/stripe'
+import { confirmCheckout, listInvoices, stripeMode } from '@/lib/stripe'
 import { cancelSubscriptionAction, portalAction } from '../../actions'
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -35,6 +35,7 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
   const agencyPrice = agency ? agencyQuote(ws.seats, ws.promptPool, ws.billingInterval).total : 0
   const mode = stripeMode()
   const name = planName(ws.plan, lang)
+  const invoices = canManage(role) ? await listInvoices(ws) : []
 
   return (
     <div className="space-y-4">
@@ -153,6 +154,33 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
           </Card>
         )}
       </div>
+
+      {invoices.length > 0 && (
+        <Card>
+          <CardHeader title={t('Invoices', 'Facturas')} hint={t('Issued automatically with every payment. Taxes are calculated from your billing country and VAT number.', 'Se emiten solas con cada cobro. Los impuestos se calculan según tu país de facturación y tu NIF-IVA.')} />
+          <ul className="divide-y divide-line-2 border-t border-line-2">
+            {invoices.map((inv) => (
+              <li key={inv.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-[14px]">
+                <div className="min-w-0">
+                  <div className="font-semibold text-ink num">{inv.number || t('Invoice', 'Factura')}</div>
+                  <div className="text-[12.5px] text-mute">
+                    {fmtDate(new Date(inv.date * 1000).toISOString(), lang)} ·{' '}
+                    {inv.status === 'paid' ? t('Paid', 'Pagada') : inv.status === 'open' ? t('Pending', 'Pendiente') : inv.status === 'void' ? t('Voided', 'Anulada') : inv.status}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="font-bold text-ink num">{inv.total.toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', { style: 'currency', currency: inv.currency.toUpperCase() })}</span>
+                  {inv.pdf && (
+                    <a href={inv.pdf} className="text-[13px] font-semibold text-ink-2 underline decoration-line underline-offset-4 hover:decoration-ink">
+                      {t('Download PDF', 'Descargar PDF')}
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   )
 }

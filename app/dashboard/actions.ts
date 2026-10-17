@@ -17,6 +17,7 @@ import * as repo from '@/lib/repo'
 import * as billing from '@/lib/stripe'
 import { startRun } from '@/lib/tracking'
 import type { Role } from '@/lib/types'
+import { LOGO_MAX_BYTES, removeWorkspaceLogo, saveWorkspaceLogo } from '@/lib/workspaceLogo'
 
 export interface ActionResult {
   ok?: string
@@ -225,6 +226,27 @@ export async function saveWorkspaceAction(_: ActionResult, fd: FormData): Promis
   })
   revalidatePath('/dashboard', 'layout')
   return { ok: t('Changes saved.', 'Cambios guardados.') }
+}
+
+export async function uploadLogoAction(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  const { workspace } = await managerCtx()
+  const { t } = await getT()
+  const f = fd.get('logo')
+  if (!(f instanceof File) || !f.size) return { error: t('Choose an image first.', 'Elige antes una imagen.') }
+  if (f.size > LOGO_MAX_BYTES) return { error: t('The image is too large (3 MB max).', 'La imagen pesa demasiado (máximo 3 MB).') }
+  if (!/^image\/(png|jpe?g|webp|gif|svg\+xml|avif)$/.test(f.type)) return { error: t('Use a PNG, JPG, WebP or SVG image.', 'Usa una imagen PNG, JPG, WebP o SVG.') }
+  const ok = await saveWorkspaceLogo(workspace.id, Buffer.from(await f.arrayBuffer()))
+  if (!ok) return { error: t("We couldn't read that image. Try another file.", 'No hemos podido leer esa imagen. Prueba con otro archivo.') }
+  revalidatePath('/dashboard', 'layout')
+  return { ok: t('Logo updated.', 'Logo actualizado.') }
+}
+
+export async function removeLogoAction(_: ActionResult): Promise<ActionResult> {
+  const { workspace } = await managerCtx()
+  const { t } = await getT()
+  await removeWorkspaceLogo(workspace.id)
+  revalidatePath('/dashboard', 'layout')
+  return { ok: t("Back to your website's icon.", 'Vuelve a salir el icono de tu web.') }
 }
 
 export async function saveEnginesAction(_: ActionResult, fd: FormData): Promise<ActionResult> {

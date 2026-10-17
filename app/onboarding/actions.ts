@@ -97,7 +97,7 @@ export interface FinishPayload {
 }
 
 export async function finishAction(payload: FinishPayload): Promise<{ error: string } | { ok: true; runId: number | null }> {
-  const { ws } = await draftWorkspace()
+  const { ws, userId } = await draftWorkspace()
   const { t } = await getT()
   const brandName = payload.brandName.trim().slice(0, 80)
   if (!brandName) return { error: t('Your brand name is missing.', 'Falta el nombre de tu marca.') }
@@ -117,6 +117,8 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
   for (const p of prompts.slice(0, limit)) repo.addPrompt(ws.id, p.text, p.topic || 'General', 'sugerido')
   repo.addSuggestions(ws.id, [...prompts.slice(limit), ...payload.leftovers].map((p) => ({ text: p.text, topic: p.topic || 'General', why: 'why' in p ? String(p.why) : '' })))
   repo.updateWorkspace(ws.id, { onboarded: true })
+  // El panel abre justo este espacio (no otro anterior de la misma persona).
+  repo.updateUser(userId, { currentWorkspaceId: ws.id })
 
   // Una sola prueba gratis por web: si otra cuenta ya la usó, este espacio
   // empieza sin prueba (el panel le pide elegir un plan) y no se gasta API.

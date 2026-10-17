@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
+import { useActionState, useRef, useState, useTransition } from 'react'
 import {
   addCompetitorAction,
   addPromptAction,
@@ -9,15 +9,17 @@ import {
   deleteAccountAction,
   inviteAction,
   moreSuggestionsAction,
+  removeLogoAction,
   saveEnginesAction,
   saveProfileAction,
   saveWorkspaceAction,
+  uploadLogoAction,
   type ActionResult,
 } from '@/app/dashboard/actions'
 import { IconPlus, IconSpark } from '../icons'
 import { useT } from '../LangProvider'
 import { Select } from './Select'
-import { btnClass, Field, inputClass, Notice, PlatformTag, textareaClass } from '../ui'
+import { BrandAvatar, btnClass, Field, inputClass, Notice, PlatformTag, textareaClass } from '../ui'
 
 /** Ruedita de carga para los botones mientras la acción está en marcha. */
 function Spinner({ size = 15 }: { size?: number }) {
@@ -164,6 +166,65 @@ const LANGS: Record<string, { en: string; es: string }> = {
   it: { en: 'Italian', es: 'Italiano' },
   pt: { en: 'Portuguese', es: 'Portugués' },
   ca: { en: 'Catalan', es: 'Catalán' },
+}
+
+/**
+ * Logo del espacio: el icono de su web por defecto, o una imagen propia que se
+ * sube aquí (se recorta sola en cuadrado). Se ve en la barra lateral y en las
+ * gráficas y listas del panel.
+ */
+export function LogoForm({ name, domain, logo, disabled }: { name: string; domain: string; logo: string | null; disabled: boolean }) {
+  const t = useT()
+  const form = useRef<HTMLFormElement>(null)
+  const [state, upload, uploading] = useActionState<ActionResult, FormData>(uploadLogoAction, {})
+  const [removed, remove, removing] = useActionState<ActionResult, FormData>(removeLogoAction, {})
+  const [last, setLast] = useState<'up' | 'rm'>('up')
+  const busy = uploading || removing
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        {logo ? (
+          <span className="relative inline-flex h-16 w-16 shrink-0 overflow-hidden rounded-[16px] shadow-[0_1px_2px_rgba(4,25,28,0.08)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logo} alt="" className="h-full w-full object-cover" />
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-black/[0.07]" />
+          </span>
+        ) : (
+          <BrandAvatar name={name} domain={domain || undefined} size={64} />
+        )}
+        <div className="min-w-0 text-[13px] leading-relaxed text-mute">
+          {logo
+            ? t('Your own logo. It replaces the icon from your website across the dashboard.', 'Tu logo propio. Sustituye al icono de tu web en todo el panel.')
+            : t("We're using the icon from your website. Upload your own if it doesn't look right.", 'Usamos el icono de tu web. Sube el tuyo si no se ve bien.')}
+          <div className="text-[12px] text-faint">{t('PNG, JPG, WebP or SVG, up to 3 MB. Square works best.', 'PNG, JPG, WebP o SVG, hasta 3 MB. Mejor si es cuadrado.')}</div>
+        </div>
+      </div>
+      <form ref={form} action={upload} className="flex flex-wrap items-center gap-2">
+        <label className={btnClass('secondary', 'md', busy || disabled ? 'pointer-events-none opacity-60' : 'cursor-pointer')}>
+          {uploading && <Spinner />}
+          {logo ? t('Change logo', 'Cambiar logo') : t('Upload logo', 'Subir logo')}
+          <input
+            type="file"
+            name="logo"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,image/avif"
+            className="sr-only"
+            disabled={busy || disabled}
+            onChange={(e) => {
+              setLast('up')
+              if (e.currentTarget.files?.length) form.current?.requestSubmit()
+            }}
+          />
+        </label>
+        {logo && (
+          <button formAction={remove} onClick={() => setLast('rm')} disabled={busy || disabled} className="rounded-full px-3 py-2 text-[13px] font-semibold text-mute transition-colors hover:text-ink disabled:opacity-60">
+            {removing && <Spinner />}
+            {t("Use my website's icon", 'Usar el icono de mi web')}
+          </button>
+        )}
+      </form>
+      <Result state={last === 'rm' ? removed : state} />
+    </div>
+  )
 }
 
 export function WorkspaceForm({

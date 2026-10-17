@@ -20,6 +20,7 @@ export function pctInt(n: number, lang: Lang): string {
 }
 
 const LIB_EN: Record<string, string> = {
+  'La prueba gratis incluye un solo espacio. Elige un plan para crear más.': 'The free trial includes one workspace. Choose a plan to create more.',
   'Los pagos no están configurados todavía.': "Payments aren't set up yet.",
   'Stripe no devolvió la página de pago.': "Stripe didn't return the checkout page.",
   'Este espacio todavía no tiene datos de facturación.': "This workspace doesn't have billing details yet.",

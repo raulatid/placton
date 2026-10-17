@@ -12,7 +12,7 @@ import sharp from 'sharp'
 
 // Junto a la base de datos: en producción, en el volumen persistente.
 const DIR = path.join(process.env.PLACTON_DATA_DIR || path.join(process.cwd(), 'data'), 'logos')
-const OUT = 128
+const TILE = 128
 const HIT_DAYS = 30
 const MISS_DAYS = 3
 const MAX_BYTES = 2_000_000
@@ -137,7 +137,7 @@ async function trimMargin(input: Buffer): Promise<Buffer> {
   }
 }
 
-async function toTile(raw: Buffer): Promise<Buffer | null> {
+async function toTile(raw: Buffer, OUT = TILE): Promise<Buffer | null> {
   let input: Buffer
   let meta: sharp.Metadata
   try {
@@ -192,6 +192,11 @@ async function toTile(raw: Buffer): Promise<Buffer | null> {
     .flatten({ background: bg })
     .png()
     .toBuffer()
+}
+
+/** Logo subido por el cliente: el mismo tratamiento, a 256 px para pantallas retina. */
+export function uploadedLogoTile(raw: Buffer): Promise<Buffer | null> {
+  return toTile(raw, 256)
 }
 
 async function fresh(file: string, days: number): Promise<boolean> {

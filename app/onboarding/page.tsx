@@ -26,8 +26,10 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
     if (owner && repo.accessOf(owner).ok) {
       const client = repo.createClientWorkspace(user.id, owner, 'New client')
       if (!client) redirect(`/dashboard/settings/billing?error=${encodeURIComponent(t('You have used all the clients in your plan. Add more here.', 'Has usado todos los clientes de tu plan. Añade más aquí.'))}`)
-    } else {
+    } else if (repo.canCreateWorkspace(user.id) || !spaces.some((w) => w.onboarded)) {
       repo.createWorkspace(user.id, 'My workspace')
+    } else {
+      redirect(`/dashboard/settings/billing?error=${encodeURIComponent('La prueba gratis incluye un solo espacio. Elige un plan para crear más.')}`)
     }
     redirect('/onboarding')
   }

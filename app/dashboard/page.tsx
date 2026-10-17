@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MentionBars, Sparkline } from '@/components/charts'
-import { IconArrow, IconIdea } from '@/components/icons'
+import { IconArrow } from '@/components/icons'
 import { QuerySelect } from '@/components/panel/QuerySelect'
 import { RangePicker } from '@/components/panel/RangePicker'
 import { dec1 } from '@/components/panel/format'
@@ -13,6 +13,7 @@ import { pageCtx } from '@/lib/guard'
 import { getT, pick } from '@/lib/i18n'
 import { insightsOf } from '@/lib/insights'
 import { answersList, overview, parseRange, RANGE_LABEL, timeline, untrackedBrands } from '@/lib/metrics'
+import { suggestedDomain } from '@/lib/brandDomain'
 import * as repo from '@/lib/repo'
 import { activeRun, lastRun } from '@/lib/tracking'
 import { quickAddCompetitorAction } from './actions'
@@ -63,7 +64,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   const focus = data.ranking.find((b) => b.key === sp.marca) ?? own
   const plats = platforms().filter((p) => p.available)
   const ideas = insightsOf(ws.id).slice(0, 3)
-  const untracked = untrackedBrands(ws, rangeId, 4)
+  const untracked = untrackedBrands(ws, rangeId, 4).map((u) => ({ ...u, domain: suggestedDomain(ws, u.name) }))
   const active = activeRun(ws.id)
   const last = lastRun(ws.id)
 
@@ -205,13 +206,13 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               />
               {view === 'marcas' ? (
                 <MentionBars
-                  data={data.ranking.slice(0, 8).map((b) => ({ key: b.key, name: b.name, own: b.own, direct: b.direct, indirect: b.indirect, domain: b.domain || undefined }))}
+                  data={data.ranking.map((b) => ({ key: b.key, name: b.name, own: b.own, direct: b.direct, indirect: b.indirect, domain: b.domain || undefined }))}
                   lang={lang}
                 />
               ) : (
                 <Timeline
                   days={tl.days}
-                  series={tl.series.slice(0, 8).map((s) => ({ ...s, color: colorOf.get(s.key) ?? '#93a3a6', domain: domainOf.get(s.key) || undefined }))}
+                  series={tl.series.map((s) => ({ ...s, color: colorOf.get(s.key) ?? '#93a3a6', domain: domainOf.get(s.key) || undefined }))}
                 />
               )}
             </Card>
@@ -431,19 +432,17 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
               {ideas.length ? (
                 <ul className="divide-y divide-line-2 px-6 pb-3">
                   {ideas.map((i, k) => (
-                    <li key={i.id} className="anim-fade flex gap-3 py-3" style={stagger(k + 9)}>
-                      <span className="relative mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink-2">
-                        <IconIdea size={15} />
+                    <li key={i.id} className="anim-fade py-3.5" style={stagger(k + 9)}>
+                      <span className="inline-flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.09em] text-mute">
                         <span
                           aria-hidden="true"
-                          className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ring-2 ring-white"
-                          style={{ background: i.severity === 'critico' ? '#c2410c' : i.severity === 'aviso' ? '#d97706' : i.severity === 'bien' ? '#047857' : '#00a38c' }}
+                          className="h-[2px] w-3 rounded-full"
+                          style={{ background: i.severity === 'critico' ? '#c2410c' : i.severity === 'aviso' ? '#b45309' : i.severity === 'bien' ? '#047857' : '#00a38c' }}
                         />
+                        {pick({ critico: { en: 'Urgent', es: 'Urgente' }, aviso: { en: 'Needs attention', es: 'Atención' }, oportunidad: { en: 'Opportunity', es: 'Oportunidad' }, bien: { en: 'Going well', es: 'Va bien' } }[i.severity], lang)}
                       </span>
-                      <div className="min-w-0">
-                        <div className="text-[14px] font-bold">{pick(i.title, lang)}</div>
-                        <div className="mt-0.5 line-clamp-2 text-[13px] text-mute">{pick(i.body, lang)}</div>
-                      </div>
+                      <div className="mt-1 text-[14px] font-bold leading-snug">{pick(i.title, lang)}</div>
+                      <div className="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-mute">{pick(i.body, lang)}</div>
                     </li>
                   ))}
                 </ul>
@@ -461,7 +460,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   {untracked.map((u) => (
                     <li key={u.key} className="flex items-center justify-between gap-3 py-2.5">
                       <div className="flex min-w-0 items-center gap-2.5">
-                        <BrandAvatar name={u.name} size={26} />
+                        <BrandAvatar name={u.name} domain={u.domain ?? undefined} size={26} />
                         <div className="min-w-0">
                           <div className="truncate text-[14px] font-bold">{u.name}</div>
                           <div className="text-[12px] text-mute">
@@ -472,6 +471,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                       </div>
                       <form action={quickAddCompetitorAction}>
                         <input type="hidden" name="name" value={u.name} />
+                        {u.domain && <input type="hidden" name="domain" value={u.domain} />}
                         <button className="rounded-full border border-line px-3 py-1 text-[12.5px] font-semibold transition-colors hover:border-deep hover:bg-deep hover:text-white">
                           {t('Track', 'Seguir')}
                         </button>

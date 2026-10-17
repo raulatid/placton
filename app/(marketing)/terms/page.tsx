@@ -66,10 +66,10 @@ function TermsEn() {
               <Link href="/pricing" className={linkClass}>
                 pricing page
               </Link>{' '}
-              when you subscribe. Prices are in US dollars; taxes may apply depending on your country.
+              when you subscribe. Prices are in US dollars and exclude VAT: Spanish VAT is added for customers in Spain and for consumers in the EU; EU businesses with a valid VAT number are invoiced under the reverse charge, and customers outside the EU are not charged Spanish VAT.
             </li>
             <li>Subscriptions can be monthly or yearly and renew automatically at the end of each period unless you cancel before then.</li>
-            <li>Payments are processed by Stripe. Placton never receives or stores your full card details. Stripe sends you an invoice for every payment.</li>
+            <li>Payments are processed by Stripe. Placton never receives or stores your full card details. An invoice is issued automatically for every payment, sent by email and available under Settings, Billing.</li>
             <li>If a payment fails, we may retry it and, if it is not resolved, pause tracking for the workspace until it is.</li>
             <li>
               We may change our prices. If a change affects your subscription, we will email you at least 30 days in advance and it will
@@ -227,10 +227,10 @@ function TermsEs() {
               <Link href="/pricing" className={linkClass}>
                 página de precios
               </Link>{' '}
-              en el momento de contratar. Los precios están en dólares (USD) y pueden aplicarse impuestos según tu país.
+              en el momento de contratar. Los precios están en dólares (USD) y no incluyen el IVA: se añade el IVA español a los clientes de España y a los particulares de la UE; a las empresas de la UE con NIF-IVA válido se les factura con inversión del sujeto pasivo, y a los clientes de fuera de la UE no se les repercute IVA español.
             </li>
             <li>Las suscripciones pueden ser mensuales o anuales y se renuevan automáticamente al final de cada periodo, salvo que las canceles antes.</li>
-            <li>Los pagos se procesan a través de Stripe. Placton no recibe ni guarda los datos completos de tu tarjeta. Stripe te envía la factura de cada cobro.</li>
+            <li>Los pagos se procesan a través de Stripe. Placton no recibe ni guarda los datos completos de tu tarjeta. Cada cobro genera automáticamente su factura, que te enviamos por correo y tienes en Ajustes, Suscripción.</li>
             <li>Si un cobro falla, podremos reintentarlo y, si no se resuelve, suspender el seguimiento del espacio hasta que se regularice.</li>
             <li>
               Podemos cambiar los precios. Si el cambio afecta a tu suscripción, te avisaremos por correo con al menos 30 días de

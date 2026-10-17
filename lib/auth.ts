@@ -82,9 +82,18 @@ export const currentUser = cache(async (): Promise<User | null> => {
   return repo.userById(row.userId)
 })
 
-export async function requireUser(): Promise<User> {
+/**
+ * Adónde volver tras entrar: solo rutas propias del panel o de administración
+ * (nunca otra web, para que el enlace de acceso no sirva para redirigir fuera).
+ */
+export function safeNext(raw: unknown): string | null {
+  const s = typeof raw === 'string' ? raw.trim() : ''
+  return /^\/(admin|dashboard)(\/[\w\-/]*)?(\?[\w=&%.-]*)?$/.test(s) ? s : null
+}
+
+export async function requireUser(next?: string): Promise<User> {
   const user = await currentUser()
-  if (!user) redirect('/login')
+  if (!user) redirect(next ? `/login?next=${encodeURIComponent(next)}` : '/login')
   return user
 }
 

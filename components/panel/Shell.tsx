@@ -6,15 +6,19 @@ import { useT } from '../LangProvider'
 import { LangSwitch } from '../LangSwitch'
 import { Logo, Mark } from '../Logo'
 import { IconChevron, IconLogout, IconMenu, IconPlus, IconSettings, IconUser, IconX } from '../icons'
-import { cx } from '../ui'
+import { BrandAvatar, cx } from '../ui'
+import { OwnLogoProvider } from '../ui-client'
 import { SidebarFooterNav, SidebarNav } from './SidebarNav'
 
 export interface ShellProps {
   user: { name: string; email: string }
-  workspace: { id: number; name: string; domain: string }
+  /** logo: el subido por el cliente (dirección con versión) o null para usar el de su web. */
+  workspace: { id: number; name: string; domain: string; logo: string | null }
   spaces: { id: number; name: string; domain: string }[]
   /** Plan Agencia: clientes creados y contratados (null si no es agencia). */
   agency?: { used: number; seats: number } | null
+  /** Fuera de la Agencia, otro espacio solo con un plan de pago (la prueba es de uno). */
+  canCreateSpace: boolean
   plan: { label: string; detail: string; used: number; limit: number; cta: string | null; warn: boolean }
   unreadIdeas: number
   admin: boolean
@@ -36,12 +40,22 @@ const PanelIcon = () => (
 )
 
 /** Selector de espacio, abajo del todo de la barra lateral; el menú se abre hacia arriba. */
-function WorkspaceSwitcher({ workspace, spaces, switchAction, onNavigate, collapsed, agency }: Pick<ShellProps, 'workspace' | 'spaces' | 'switchAction' | 'agency'> & { onNavigate?: () => void; collapsed?: boolean }) {
+function WorkspaceSwitcher({ workspace, spaces, switchAction, onNavigate, collapsed, agency, canCreateSpace }: Pick<ShellProps, 'workspace' | 'spaces' | 'switchAction' | 'agency' | 'canCreateSpace'> & { onNavigate?: () => void; collapsed?: boolean }) {
   const t = useT()
   return (
     <details className="group relative">
       <summary className={cx('glass flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors hover:bg-white', collapsed && 'justify-center px-0')} title={workspace.name}>
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-deep text-[12px] font-bold text-glow">{workspace.name.slice(0, 1).toUpperCase()}</span>
+        {workspace.logo ? (
+          <span className="relative inline-flex h-7 w-7 shrink-0 overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(4,25,28,0.08)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={workspace.logo} alt="" className="h-full w-full object-cover" />
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-black/[0.07]" />
+          </span>
+        ) : workspace.domain ? (
+          <BrandAvatar name={workspace.name} domain={workspace.domain} size={28} />
+        ) : (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-deep text-[12px] font-bold text-glow">{workspace.name.slice(0, 1).toUpperCase()}</span>
+        )}
         {!collapsed && (
           <>
             <span className="min-w-0 flex-1">
@@ -64,10 +78,22 @@ function WorkspaceSwitcher({ workspace, spaces, switchAction, onNavigate, collap
           </form>
         ))}
         <div className="my-1 border-t border-line-2" />
-        <Link href="/onboarding?new=1" className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-ink-2 hover:bg-line-2">
-          <IconPlus size={15} />{' '}
-          {agency ? t(`New client (${agency.used} of ${agency.seats})`, `Nuevo cliente (${agency.used} de ${agency.seats})`) : t('New workspace', 'Nuevo espacio')}
-        </Link>
+        {agency || canCreateSpace ? (
+          <Link href="/onboarding?new=1" className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-ink-2 hover:bg-line-2">
+            <IconPlus size={15} />{' '}
+            {agency ? t(`New client (${agency.used} of ${agency.seats})`, `Nuevo cliente (${agency.used} de ${agency.seats})`) : t('New workspace', 'Nuevo espacio')}
+          </Link>
+        ) : (
+          <Link
+            href="/dashboard/settings/billing"
+            onClick={onNavigate}
+            title={t('The free trial includes one workspace.', 'La prueba gratis incluye un solo espacio.')}
+            className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-faint hover:bg-line-2"
+          >
+            <IconPlus size={15} /> <span className="flex-1">{t('New workspace', 'Nuevo espacio')}</span>
+            <span className="text-[11px] font-medium">{t('Paid plans', 'De pago')}</span>
+          </Link>
+        )}
         <Link href="/dashboard/settings" onClick={onNavigate} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-ink-2 hover:bg-line-2">
           <IconSettings size={15} /> {t('Workspace settings', 'Ajustes del espacio')}
         </Link>
@@ -150,7 +176,7 @@ function Sidebar(props: Omit<ShellProps, 'children'> & { onNavigate?: () => void
         </Link>
       )}
       {!collapsed && <PlanCard plan={plan} onNavigate={onNavigate} />}
-      <WorkspaceSwitcher workspace={props.workspace} spaces={props.spaces} switchAction={props.switchAction} onNavigate={onNavigate} collapsed={collapsed} agency={props.agency} />
+      <WorkspaceSwitcher workspace={props.workspace} spaces={props.spaces} switchAction={props.switchAction} onNavigate={onNavigate} collapsed={collapsed} agency={props.agency} canCreateSpace={props.canCreateSpace} />
     </div>
   )
 }
@@ -206,6 +232,7 @@ export function Shell(props: ShellProps) {
     })
 
   return (
+    <OwnLogoProvider domain={props.workspace.domain} src={props.workspace.logo}>
     <div
       className={cx(
         // .panel da a las tarjetas el acabado de cristal (globals.css).
@@ -269,5 +296,6 @@ export function Shell(props: ShellProps) {
         <main className="pb-10 pt-4 lg:pt-1">{props.children}</main>
       </div>
     </div>
+    </OwnLogoProvider>
   )
 }

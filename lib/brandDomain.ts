@@ -47,15 +47,65 @@ async function fromAI(name: string, context: string, country: string): Promise<s
   }
 }
 
+/* ───── Caché por nombre y país: cada marca se busca una sola vez ───── */
+
+function cached(name: string, country: string): string | null | undefined {
+  const r = one<{ domain: string }>('SELECT domain FROM brand_domains WHERE nameKey = ? AND country = ?', [compact(name), country])
+  return r ? r.domain || null : undefined
+}
+
+function remember(name: string, country: string, domain: string | null) {
+  run('INSERT OR REPLACE INTO brand_domains (nameKey, country, domain, checkedAt) VALUES (?, ?, ?, ?)', [compact(name), country, domain ?? '', nowIso()])
+}
+
+const queue: { name: string; country: string; context: string }[] = []
+let working = false
+
+async function drain() {
+  if (working) return
+  working = true
+  try {
+    while (queue.length) {
+      const job = queue.shift()!
+      if (cached(job.name, job.country) !== undefined) continue
+      remember(job.name, job.country, await fromAI(job.name, job.context, job.country))
+    }
+  } finally {
+    working = false
+  }
+}
+
+/**
+ * Web de una marca sugerida (nombrada por las IA, sin dominio) para enseñar su
+ * logo. Al momento si ya se conoce o sale en las fuentes citadas; si no, se busca
+ * en segundo plano y aparecerá en la siguiente carga.
+ */
+export function suggestedDomain(ws: { id: number; brandName: string; domain: string; description: string; country: string }, name: string): string | null {
+  const hit = cached(name, ws.country)
+  if (hit !== undefined) return hit
+  const fromCites = fromCitations(ws.id, name)
+  if (fromCites) {
+    remember(name, ws.country, fromCites)
+    return fromCites
+  }
+  if (queue.length < 40 && !queue.some((q) => compact(q.name) === compact(name) && q.country === ws.country)) {
+    queue.push({ name, country: ws.country, context: `competitor of ${ws.brandName} (${ws.domain}). ${ws.description}`.slice(0, 400) })
+    void drain()
+  }
+  return null
+}
+
 /** Busca y guarda la web de un competidor sin dominio. Devuelve el dominio o null. */
 export async function resolveCompetitorDomain(workspaceId: number, competitorId: number): Promise<string | null> {
   const c = one<{ id: number; name: string; domain: string }>('SELECT id, name, domain FROM competitors WHERE id = ? AND workspaceId = ?', [competitorId, workspaceId])
   if (!c || c.domain) return c?.domain || null
   run('UPDATE competitors SET domainCheckedAt = ? WHERE id = ?', [nowIso(), c.id])
-  let domain = fromCitations(workspaceId, c.name)
-  if (!domain) {
-    const ws = repo.workspaceById(workspaceId)
-    domain = await fromAI(c.name, ws ? `competitor of ${ws.brandName} (${ws.domain}). ${ws.description}`.slice(0, 400) : '', ws?.country ?? '')
+  const ws = repo.workspaceById(workspaceId)
+  const country = ws?.country ?? ''
+  let domain = cached(c.name, country) ?? fromCitations(workspaceId, c.name)
+  if (!domain && cached(c.name, country) === undefined) {
+    domain = await fromAI(c.name, ws ? `competitor of ${ws.brandName} (${ws.domain}). ${ws.description}`.slice(0, 400) : '', country)
+    remember(c.name, country, domain)
   }
   if (domain) run('UPDATE competitors SET domain = ? WHERE id = ?', [domain, c.id])
   return domain

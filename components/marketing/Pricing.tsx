@@ -142,8 +142,8 @@ export function Pricing({ as: Heading = 'h2' }: { as?: 'h1' | 'h2' }) {
         </Heading>
         <p className="mt-4 text-pretty text-[16px] leading-relaxed text-mute sm:text-[17px]">
           {t(
-            `Every plan starts with ${TRIAL_DAYS} days free and no card. Payments are handled securely by Stripe and you can cancel anytime.`,
-            `Todos los planes empiezan con ${TRIAL_DAYS} días gratis y sin tarjeta. Los pagos los gestiona Stripe de forma segura y puedes cancelar cuando quieras.`,
+            `Every plan starts with ${TRIAL_DAYS} days free and no card. Prices exclude VAT, which is added when it applies. Payments are handled securely by Stripe and you can cancel anytime.`,
+            `Todos los planes empiezan con ${TRIAL_DAYS} días gratis y sin tarjeta. Precios sin IVA, que se añade cuando corresponde. Los pagos los gestiona Stripe de forma segura y puedes cancelar cuando quieras.`,
           )}
         </p>
       </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 
 // Piezas de ui.tsx que necesitan el navegador (saber si un favicon cargó o falló).
 // Los logotipos son el icono oficial de cada web (de /public/platforms o de /api/logo); nunca se dibujan aquí.
@@ -47,8 +47,17 @@ export function PlatformLogo({ name, short, color, src, size }: { name: string; 
  * Logo de una marca como icono de app: la inicial hasta que carga y, después,
  * el cuadrado que prepara /api/logo con el icono de su web, a todo el tamaño.
  */
+/** Logo propio del espacio abierto: sustituye al icono de su web en todo el panel. */
+const OwnLogo = createContext<{ domain: string; src: string } | null>(null)
+const bare = (d: string) => d.toLowerCase().replace(/^www\./, '')
+
+export function OwnLogoProvider({ domain, src, children }: { domain: string; src: string | null; children: React.ReactNode }) {
+  return <OwnLogo.Provider value={src && domain ? { domain: bare(domain), src } : null}>{children}</OwnLogo.Provider>
+}
+
 export function BrandLogo({ letter, domain }: { letter: string; domain: string }) {
-  const src = `/api/logo?d=${encodeURIComponent(domain)}`
+  const own = useContext(OwnLogo)
+  const src = own && own.domain === bare(domain) ? own.src : `/api/logo?d=${encodeURIComponent(domain)}`
   const { ref, state, onLoad, onError } = useImageState(src)
   return (
     <>

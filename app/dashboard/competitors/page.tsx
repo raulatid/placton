@@ -8,6 +8,7 @@ import { platforms } from '@/lib/engines'
 import { pageCtx } from '@/lib/guard'
 import { getT } from '@/lib/i18n'
 import { brandStats, parseRange, untrackedBrands } from '@/lib/metrics'
+import { suggestedDomain } from '@/lib/brandDomain'
 import * as repo from '@/lib/repo'
 import { quickAddCompetitorAction, removeCompetitorAction, updateCompetitorAction } from '../actions'
 
@@ -26,7 +27,8 @@ export default async function CompetitorsPage({ searchParams }: { searchParams: 
   const tracked = repo.trackedBrands(ws)
   const colorOf = new Map(tracked.map((b, i) => [b.key, seriesColor(i)]))
   const own = brands.find((b) => b.own)!
-  const untracked = untrackedBrands(ws, rangeId, 10)
+  // Con su web (si ya se conoce) para enseñar el logo; las que falten se buscan en segundo plano.
+  const untracked = untrackedBrands(ws, rangeId, 10).map((u) => ({ ...u, domain: suggestedDomain(ws, u.name) }))
   const plats = platforms().filter((p) => p.available)
   const sorted = [...brands].sort((a, b) => b.visibility - a.visibility)
 
@@ -131,7 +133,7 @@ export default async function CompetitorsPage({ searchParams }: { searchParams: 
               {untracked.map((u, k) => (
                 <li key={u.key} className="anim-fade flex items-center justify-between gap-3 px-6 py-2.5 transition-colors hover:bg-[#f6f9f8]" style={stagger(4 + Math.min(k, 8))}>
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <BrandAvatar name={u.name} size={26} />
+                    <BrandAvatar name={u.name} domain={u.domain ?? undefined} size={26} />
                     <div className="min-w-0">
                       <div className="truncate text-[14px] font-semibold">{u.name}</div>
                       <div className="text-[12px] text-mute">
@@ -141,6 +143,7 @@ export default async function CompetitorsPage({ searchParams }: { searchParams: 
                   </div>
                   <form action={quickAddCompetitorAction}>
                     <input type="hidden" name="name" value={u.name} />
+                    {u.domain && <input type="hidden" name="domain" value={u.domain} />}
                     <button className="rounded-full border border-line bg-white px-3 py-1 text-[12.5px] font-semibold transition-colors hover:border-faint hover:bg-line-2 hover:text-ink">
                       {t('Track', 'Seguir')}
                     </button>

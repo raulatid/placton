@@ -23,13 +23,15 @@ export async function POST(req: NextRequest) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
     const day = today()
     const visitor = createHash('sha256').update(`${process.env.CRON_SECRET ?? 'placton'}:${ip}:${ua}:${day}`).digest('hex').slice(0, 24)
-    run('INSERT INTO page_views (day, path, refHost, utmSource, visitor, lang, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+    const device = /iPad|Tablet/i.test(ua) ? 'tablet' : /Mobi|Android|iPhone/i.test(ua) ? 'movil' : 'ordenador'
+    run('INSERT INTO page_views (day, path, refHost, utmSource, visitor, lang, device, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
       day,
       path,
       refHost.slice(0, 100),
       String(body.utm ?? '').slice(0, 60),
       visitor,
       String(body.lang ?? '').slice(0, 5),
+      device,
       nowIso(),
     ])
   } catch {}

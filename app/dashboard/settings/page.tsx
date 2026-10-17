@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
-import { EnginesForm, WorkspaceForm } from '@/components/panel/Forms'
+import { EnginesForm, LogoForm, WorkspaceForm } from '@/components/panel/Forms'
 import { btnClass, Card, CardHeader, Notice } from '@/components/ui'
 import { canManage, requireCtx } from '@/lib/auth'
 import { platforms } from '@/lib/engines'
 import { getT } from '@/lib/i18n'
 import * as repo from '@/lib/repo'
+import { workspaceLogoUrl } from '@/lib/workspaceLogo'
 import { deleteWorkspaceAction } from '../actions'
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,6 +28,12 @@ export default async function SettingsPage() {
         </div>
       </Card>
       <div className="space-y-4">
+        <Card i={2}>
+          <CardHeader title={t('Logo', 'Logo')} hint={t('How your brand looks in the dashboard.', 'Cómo se ve tu marca en el panel.')} />
+          <div className="px-6 pb-6">
+            <LogoForm name={ws.brandName || ws.name} domain={ws.domain} logo={workspaceLogoUrl(ws)} disabled={!manage} />
+          </div>
+        </Card>
         <Card i={2}>
           <CardHeader title={t('Platforms', 'Plataformas')} hint={t('Where we ask every week.', 'Dónde preguntamos cada semana.')} />
           <div className="px-6 pb-6">

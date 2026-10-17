@@ -235,6 +235,14 @@ CREATE TABLE IF NOT EXISTS billing_events (
   createdAt TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS brand_domains (
+  nameKey TEXT NOT NULL,
+  country TEXT NOT NULL DEFAULT '',
+  domain TEXT NOT NULL DEFAULT '',
+  checkedAt TEXT NOT NULL,
+  PRIMARY KEY (nameKey, country)
+);
+
 CREATE TABLE IF NOT EXISTS signup_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   ipHash TEXT NOT NULL,
@@ -262,6 +270,14 @@ CREATE TABLE IF NOT EXISTS error_log (
   createdAt TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_error_log_created ON error_log(createdAt);
+
+CREATE TABLE IF NOT EXISTS cost_snapshots (
+  day TEXT NOT NULL,
+  source TEXT NOT NULL,
+  value REAL NOT NULL,
+  updatedAt TEXT NOT NULL,
+  PRIMARY KEY (day, source)
+);
 
 CREATE TABLE IF NOT EXISTS email_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,6 +310,10 @@ export function db(): DatabaseSync {
     'ALTER TABLE workspaces ADD COLUMN trialEndedMailAt TEXT',
     // Competidores añadidos sin web: cuándo se buscó su dominio (para no repetir).
     'ALTER TABLE competitors ADD COLUMN domainCheckedAt TEXT',
+    // Logo subido por el cliente para su propia marca (fecha = versión de la imagen).
+    'ALTER TABLE workspaces ADD COLUMN logoUpdatedAt TEXT',
+    // Analítica: tipo de dispositivo de cada visita (móvil, tableta u ordenador).
+    "ALTER TABLE page_views ADD COLUMN device TEXT NOT NULL DEFAULT ''",
   ]) {
     try {
       conn.exec(sql)

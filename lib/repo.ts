@@ -214,6 +214,14 @@ export function accessOf(ws: Workspace): { ok: boolean; reason: 'trial' | 'activ
   return { ok: false, reason: 'canceled' }
 }
 
+/**
+ * Crear otro espacio (fuera de la Agencia) exige tener ya uno de pago: la prueba
+ * gratis es de un solo espacio por persona.
+ */
+export function canCreateWorkspace(userId: number): boolean {
+  return workspacesOf(userId).some((w) => w.role === 'owner' && w.plan !== 'trial' && !w.billingOwnerId && accessOf(w).ok)
+}
+
 export function trialDaysLeft(ws: Workspace): number {
   if (!ws.trialEndsAt) return 0
   return Math.max(0, Math.ceil((new Date(ws.trialEndsAt).getTime() - Date.now()) / 86_400_000))

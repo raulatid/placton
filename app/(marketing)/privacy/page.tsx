@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
+import { CookieSettingsButton } from '@/components/marketing/Analytics'
 
 // Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A, 30007 Murcia.
 
@@ -138,11 +139,19 @@ function PrivacyEn() {
             (aepd.es).
           </p>
 
-          <h2>9. Cookies</h2>
+          <h2 id="cookies">9. Cookies</h2>
           <p>
-            We only use technical cookies needed for the service to work, such as the one that keeps you signed in and the one that
-            remembers your language. We do not use advertising or third-party tracking cookies. If we ever do, we will ask for your consent
-            first.
+            We use technical cookies needed for the service to work, such as the one that keeps you signed in and the one that remembers
+            your language. These do not need your consent.
+          </p>
+          <p>
+            Only if you accept, we also use Google Analytics cookies (_ga and _ga_*, up to two years) to measure, in aggregate, how the
+            website is used. Google Analytics is provided by Google Ireland Limited, which acts as our processor; data may be transferred
+            to the United States under the EU-US Data Privacy Framework. If you reject them, nothing from Google is loaded. We do not use
+            advertising cookies.
+          </p>
+          <p>
+            <CookieSettingsButton className={linkClass} />
           </p>
 
           <h2>10. Security</h2>
@@ -284,10 +293,18 @@ function PrivacyEs() {
             Datos (aepd.es).
           </p>
 
-          <h2>9. Cookies</h2>
+          <h2 id="cookies">9. Cookies</h2>
           <p>
-            Usamos solo cookies técnicas necesarias para que el servicio funcione, como la que mantiene tu sesión iniciada y la que recuerda tu idioma. No usamos
-            cookies publicitarias ni de seguimiento de terceros. Si algún día las usamos, te pediremos antes tu consentimiento.
+            Usamos cookies técnicas necesarias para que el servicio funcione, como la que mantiene tu sesión iniciada y la que recuerda tu idioma. Estas no
+            necesitan tu consentimiento.
+          </p>
+          <p>
+            Solo si lo aceptas, usamos además cookies de Google Analytics (_ga y _ga_*, hasta dos años) para medir de forma agregada cómo se usa la web. Google
+            Analytics lo presta Google Ireland Limited como encargado del tratamiento; los datos pueden transferirse a Estados Unidos al amparo del Marco de
+            Privacidad de Datos UE-EE. UU. Si las rechazas, no se carga nada de Google. No usamos cookies publicitarias.
+          </p>
+          <p>
+            <CookieSettingsButton className={linkClass} />
           </p>
 
           <h2>10. Seguridad</h2>

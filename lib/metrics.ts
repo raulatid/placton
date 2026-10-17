@@ -1,5 +1,6 @@
 import 'server-only'
 import { addDays, all, jsonList, one, today } from './db'
+import { brandKeys } from './norm'
 import { trackedBrands } from './repo'
 import type { Sentiment, TrackedBrand, Workspace } from './types'
 
@@ -457,11 +458,16 @@ export function sources(ws: Workspace, rangeId: RangeId, brandKey?: string): { r
 
 export function untrackedBrands(ws: Workspace, rangeId: RangeId, limit = 8): { key: string; name: string; n: number; avgRank: number | null }[] {
   const range = resolveRange(ws.id, rangeId)
+  // Las menciones guardan el tipo del momento en que se midieron: una marca que
+  // luego pasaste a seguir no debe volver a salir como sugerida.
+  const tracked = new Set(trackedBrands(ws).flatMap((b) => [b.key, ...brandKeys(b.name, b.domain, b.aliases)]))
   return all<{ key: string; name: string; n: number; avgRank: number | null }>(
     `SELECT brandKey AS key, MAX(name) AS name, COUNT(DISTINCT answerId) AS n, AVG(rank) AS avgRank FROM mentions
      WHERE workspaceId = ? AND day BETWEEN ? AND ? AND kind = 'otro' GROUP BY brandKey ORDER BY n DESC, avgRank ASC LIMIT ?`,
-    [ws.id, range.from, range.to, limit],
+    [ws.id, range.from, range.to, limit + tracked.size],
   )
+    .filter((r) => !tracked.has(r.key))
+    .slice(0, limit)
 }
 
 export function brandByKey(ws: Workspace, brandKey: string): TrackedBrand | null {

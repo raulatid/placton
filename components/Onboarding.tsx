@@ -1,7 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { analyzeAction, finishAction, suggestAction } from '@/app/onboarding/actions'
 import type { BrandProfile, SuggestedPrompt } from '@/lib/ai'
 import { PLANS } from '@/lib/plans'
@@ -151,7 +150,6 @@ function BackLink({ onClick }: { onClick: () => void }) {
 export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWeb?: string; limit?: number }) {
   const LIMIT = limit
   const t = useT()
-  const router = useRouter()
   const [step, setStep] = useState<Step>('web')
   const [url, setUrl] = useState(initialWeb)
   const [profile, setProfile] = useState<BrandProfile | null>(null)
@@ -165,6 +163,11 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
   const [warning, setWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Al panel con una carga completa: el router del cliente puede tener guardada
+  // la versión de /dashboard de antes de terminar el alta (que manda aquí) y
+  // entraría en un bucle /onboarding ↔ /dashboard hasta mostrar un error.
+  const goToDashboard = useCallback(() => window.location.assign('/dashboard?first=1'), [])
 
   /* Paso 1 → 2: analizar la web (una vez por dirección). */
   function submitWeb(e: React.FormEvent) {
@@ -391,7 +394,7 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
         </div>
       )}
 
-      {step === 'setup' && <Setup onDone={() => router.push('/dashboard?first=1')} />}
+      {step === 'setup' && <Setup onDone={goToDashboard} />}
     </div>
   )
 }

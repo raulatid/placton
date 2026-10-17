@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-import { IconIdea } from '@/components/icons'
-import { Badge, Card, cx, Empty, PageHeader, stagger } from '@/components/ui'
+import { Card, cx, Empty, PageHeader, stagger } from '@/components/ui'
 import { pageCtx } from '@/lib/guard'
 import { getT, pick, type T } from '@/lib/i18n'
 import { insightsOf, periodKey } from '@/lib/insights'
@@ -12,11 +11,13 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t('Insights', 'Ideas') }
 }
 
-const SEV: Record<Severity, { en: string; es: string; tone: 'bad' | 'warn' | 'brand' | 'good'; box: string }> = {
-  critico: { en: 'Urgent', es: 'Urgente', tone: 'bad', box: 'border border-line bg-white text-bad' },
-  aviso: { en: 'Needs attention', es: 'Atención', tone: 'warn', box: 'border border-line bg-white text-warn' },
-  oportunidad: { en: 'Opportunity', es: 'Oportunidad', tone: 'brand', box: 'border border-line bg-white text-brand-2' },
-  bien: { en: 'Going well', es: 'Va bien', tone: 'good', box: 'border border-line bg-white text-good' },
+// La gravedad se dice con una palabra en versalitas y un trazo corto de color;
+// nada de cajas, iconos ni insignias de color sobre color.
+const SEV: Record<Severity, { en: string; es: string; color: string }> = {
+  critico: { en: 'Urgent', es: 'Urgente', color: '#c2410c' },
+  aviso: { en: 'Needs attention', es: 'Atención', color: '#b45309' },
+  oportunidad: { en: 'Opportunity', es: 'Oportunidad', color: '#00a38c' },
+  bien: { en: 'Going well', es: 'Va bien', color: '#047857' },
 }
 
 function weekLabel(key: string, t: T): string {
@@ -43,7 +44,7 @@ export default async function IdeasPage() {
         right={
           unread ? (
             <form action={markIdeasReadAction}>
-              <button className="rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-semibold shadow-[0_1px_2px_rgba(4,25,28,0.05)] transition-colors hover:border-brand-2/40 hover:text-brand">
+              <button className="rounded-full border border-line bg-white px-3.5 py-2 text-[13px] font-semibold shadow-[0_1px_2px_rgba(4,25,28,0.05)] transition-colors hover:border-faint hover:text-ink">
                 {t('Mark all as read', 'Marcar todo como leído')}
               </button>
             </form>
@@ -60,52 +61,54 @@ export default async function IdeasPage() {
           </Empty>
         </Card>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-10">
           {[...groups.entries()].map(([key, list], g) => (
             <section key={key}>
-              <h2 className="anim-fade mb-3 flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.07em] text-mute" style={stagger(g * 3 + 1)}>
-                {weekLabel(key, t)}
-                <span className="h-px flex-1 bg-line" />
+              <h2 className="anim-fade mb-3 flex items-baseline justify-between gap-4 px-1" style={stagger(g * 3 + 1)}>
+                <span className="text-[13px] font-bold uppercase tracking-[0.08em] text-ink-2">{weekLabel(key, t)}</span>
+                <span className="text-[12.5px] text-faint num">
+                  {list.length} {list.length === 1 ? t('insight', 'idea') : t('insights', 'ideas')}
+                </span>
               </h2>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {list.map((i, k) => (
-                  // La subida va en el envoltorio: .lift necesita el transform de la tarjeta.
-                  <div key={i.id} className="anim-rise" style={stagger(Math.min(g * 3 + 2 + k, 10))}>
-                    <article className={cx('card lift h-full p-5', !i.readAt && 'border-brand-2/40! ring-2 ring-brand-2/15')}>
-                      <div className="flex items-start gap-3">
-                        <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', SEV[i.severity].box)}>
-                          <IconIdea size={18} />
-                        </span>
-                        <div className="min-w-0">
-                          <div className="mb-1 flex items-center gap-2">
-                            <Badge tone={SEV[i.severity].tone}>{SEV[i.severity][lang]}</Badge>
-                            {!i.readAt && (
-                              <span className="inline-flex items-center gap-1.5 text-[11.5px] font-bold text-brand">
-                                <span className="live-dot h-1.5 w-1.5 rounded-full bg-brand-2" />
-                                {t('New', 'Nueva')}
-                              </span>
-                            )}
-                          </div>
-                          <h3 className="text-[16px] font-bold leading-snug">{pick(i.title, lang)}</h3>
-                          <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{pick(i.body, lang)}</p>
-                          {pick(i.action, lang) && (
-                            <p className="mt-3 rounded-xl border border-line-2 bg-[#f6f9f8] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-ink">
-                              <strong>{t('What to do: ', 'Qué hacer: ')}</strong>
-                              {pick(i.action, lang)}
-                            </p>
-                          )}
-                          {pick(i.evidence, lang) && (
-                            <p className="mt-2 font-mono text-[11.5px] text-mute num">
-                              {t('Data: ', 'Dato: ')}
-                              {pick(i.evidence, lang)}
-                            </p>
+              <Card i={g * 3 + 2}>
+                <ol className="divide-y divide-line-2">
+                  {list.map((i) => {
+                    const action = pick(i.action, lang)
+                    const evidence = pick(i.evidence, lang)
+                    return (
+                      <li key={i.id} className="grid gap-x-10 gap-y-3 px-6 py-6 sm:px-8 md:grid-cols-[150px_minmax(0,1fr)]">
+                        <div className="flex items-center gap-3 md:flex-col md:items-start md:gap-1.5 md:pt-1">
+                          <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.09em] text-ink-2">
+                            <span aria-hidden="true" className="h-[2px] w-3.5 rounded-full" style={{ background: SEV[i.severity].color }} />
+                            {SEV[i.severity][lang]}
+                          </span>
+                          {!i.readAt && <span className="text-[12px] font-medium text-faint">{t('Unread', 'Sin leer')}</span>}
+                        </div>
+                        <div className="min-w-0 max-w-[720px]">
+                          <h3 className={cx('text-[17px] leading-snug tracking-[-0.01em]', i.readAt ? 'font-semibold text-ink-2' : 'font-bold text-ink')}>{pick(i.title, lang)}</h3>
+                          <p className="mt-2 text-[14.5px] leading-[1.65] text-ink-2">{pick(i.body, lang)}</p>
+                          {(action || evidence) && (
+                            <dl className="mt-4 grid gap-x-6 gap-y-2.5 border-t border-line-2 pt-4 text-[14px] leading-relaxed sm:grid-cols-[96px_minmax(0,1fr)]">
+                              {action && (
+                                <>
+                                  <dt className="text-[12px] font-semibold uppercase tracking-[0.07em] text-faint sm:pt-0.5">{t('What to do', 'Qué hacer')}</dt>
+                                  <dd className="text-ink">{action}</dd>
+                                </>
+                              )}
+                              {evidence && (
+                                <>
+                                  <dt className="text-[12px] font-semibold uppercase tracking-[0.07em] text-faint sm:pt-0.5">{t('Based on', 'Dato')}</dt>
+                                  <dd className="text-mute num">{evidence}</dd>
+                                </>
+                              )}
+                            </dl>
                           )}
                         </div>
-                      </div>
-                    </article>
-                  </div>
-                ))}
-              </div>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </Card>
             </section>
           ))}
         </div>

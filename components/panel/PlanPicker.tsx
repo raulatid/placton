@@ -144,6 +144,7 @@ export function PlanPicker({
 
       <p className="mt-4 text-[13px] text-mute">
         {t('Current plan:', 'Plan actual:')} <span className="font-semibold text-ink-2">{currentLabel}</span>
+        <span className="text-faint"> · {t('Prices exclude VAT, which is added when it applies.', 'Precios sin IVA, que se añade cuando corresponde.')}</span>
       </p>
     </section>
   )

@@ -34,6 +34,15 @@ export function recordSignup(ip: string) {
 
 /** ¿Otro espacio (de cualquier cuenta) ya usó la prueba gratis con esta web? */
 export function trialAlreadyUsed(ws: Workspace): boolean {
+  // Una prueba por persona: quien ya tiene otro espacio suyo terminado no estrena prueba.
+  if (
+    ws.createdBy &&
+    all<{ id: number }>(
+      "SELECT w.id FROM workspaces w JOIN members m ON m.workspaceId = w.id AND m.userId = ? AND m.role = 'owner' WHERE w.id <> ? AND w.onboarded = 1 AND w.billingOwnerId IS NULL LIMIT 1",
+      [ws.createdBy, ws.id],
+    ).length
+  )
+    return true
   if (!ws.domain) return false
   return Boolean(
     all<{ id: number }>("SELECT id FROM workspaces WHERE domain = ? AND id <> ? AND onboarded = 1 LIMIT 1", [ws.domain, ws.id]).length,

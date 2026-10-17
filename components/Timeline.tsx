@@ -33,7 +33,9 @@ function pctLabel(n: number, lang: Lang) {
 
 export function Timeline({ days, series }: { days: string[]; series: TimelineSeries[] }) {
   const [hover, setHover] = useState<number | null>(null)
-  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  // Con muchas marcas, las líneas se enredan: a partir de la novena empiezan
+  // apagadas y se encienden desde la leyenda.
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set(series.slice(8).map((s) => s.key)))
   const ref = useRef<SVGSVGElement>(null)
   const lang = useLang()
   const t = useT()

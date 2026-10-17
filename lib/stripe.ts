@@ -111,16 +111,72 @@ export async function ensureAgencyPromptPrice(interval: Interval): Promise<strin
 
 const isPromptItem = (item: Stripe.SubscriptionItem) => (item.price?.lookup_key ?? '').startsWith('placton_agencia_prompts_')
 
+/**
+ * Datos del emisor en todas las facturas (Reglamento de facturación, RD 1619/2012):
+ * razón social, NIF y domicilio, y la mención para clientes de fuera de España.
+ * El IVA lo calcula Stripe Tax según el país y el NIF-IVA del cliente.
+ */
+const INVOICE_SETTINGS: Stripe.CustomerCreateParams.InvoiceSettings = {
+  custom_fields: [
+    { name: 'Emisor / Issuer', value: 'SELSPY AGENCY S. COOP.' },
+    { name: 'NIF / Tax ID', value: 'F75988824' },
+  ],
+  footer:
+    'SELSPY AGENCY S. COOP. · NIF F75988824 · Paseo la Fuente, 9, 4.º A, 30007 Murcia (España) · contact@placton.tech\n' +
+    'Empresas de otros países de la UE con NIF-IVA: inversión del sujeto pasivo. Clientes de fuera de la UE: operación no sujeta al IVA español (art. 69 Ley 37/1992).\n' +
+    'EU business customers with a VAT number: reverse charge. Customers outside the EU: not subject to Spanish VAT (art. 69 Law 37/1992).',
+}
+
+/** Stripe Tax calcula el IVA (se apaga con PLACTON_STRIPE_TAX=0). */
+const autoTax = () => process.env.PLACTON_STRIPE_TAX !== '0'
+
 async function ensureCustomer(ws: Workspace, user: User): Promise<string> {
-  if (ws.stripeCustomerId) return ws.stripeCustomerId
+  if (ws.stripeCustomerId) {
+    // Clientes creados antes: se les ponen los datos fiscales del emisor.
+    await stripe().customers.update(ws.stripeCustomerId, { invoice_settings: INVOICE_SETTINGS }).catch(() => null)
+    return ws.stripeCustomerId
+  }
   const customer = await stripe().customers.create({
     email: user.email,
     name: ws.brandName || ws.name,
     preferred_locales: ['en', 'es'],
+    invoice_settings: INVOICE_SETTINGS,
     metadata: { workspaceId: String(ws.id) },
   })
   repo.updateWorkspace(ws.id, { stripeCustomerId: customer.id })
   return customer.id
+}
+
+/** NIF de la empresa en las facturas siguientes de una suscripción (identificador fiscal de la cuenta). */
+async function attachAccountTaxId(subId: string) {
+  const id = process.env.STRIPE_ACCOUNT_TAX_ID
+  if (!id) return
+  await stripe()
+    .subscriptions.update(subId, { invoice_settings: { account_tax_ids: [id] } })
+    .catch((err) => console.error('[placton] NIF en la suscripción', err))
+}
+
+/** Facturas de un espacio, para descargarlas desde Suscripción. */
+export async function listInvoices(ws: Workspace): Promise<{ id: string; number: string; date: number; total: number; currency: string; status: string; pdf: string | null; url: string | null }[]> {
+  if (!stripeReady() || !ws.stripeCustomerId) return []
+  try {
+    const list = await stripe().invoices.list({ customer: ws.stripeCustomerId, limit: 24 })
+    return list.data
+      .filter((i) => i.status !== 'draft')
+      .map((i) => ({
+        id: i.id ?? '',
+        number: i.number ?? '',
+        date: i.status_transitions?.finalized_at ?? i.created,
+        total: i.total / 100,
+        currency: i.currency,
+        status: i.status ?? '',
+        pdf: i.invoice_pdf ?? null,
+        url: i.hosted_invoice_url ?? null,
+      }))
+  } catch (err) {
+    console.error('[placton] facturas', err)
+    return []
+  }
 }
 
 export type CheckoutResult = { url: string } | { changed: true } | { error: string }
@@ -156,6 +212,7 @@ export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, inte
         items,
         proration_behavior: 'create_prorations',
         cancel_at_period_end: false,
+        automatic_tax: { enabled: autoTax() },
         metadata: { workspaceId: String(ws.id), plan, interval },
       })
       syncSubscription(updated)
@@ -173,6 +230,7 @@ export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, inte
     billing_address_collection: 'required',
     tax_id_collection: { enabled: true },
     customer_update: { name: 'auto', address: 'auto' },
+    automatic_tax: { enabled: autoTax() },
     locale: 'auto',
     subscription_data: { metadata: { workspaceId: String(ws.id), plan, interval } },
     metadata: { workspaceId: String(ws.id), plan, interval, clients: String(quantity), prompts: String(promptQty) },
@@ -198,6 +256,7 @@ export async function setAgency(ws: Workspace, clients: number, prompts: number)
   const updated = await s.subscriptions.update(sub.id, {
     items: [{ id: main.id, quantity }, promptItem ? { id: promptItem.id, quantity: promptQty } : { price: promptPrice, quantity: promptQty }],
     proration_behavior: 'create_prorations',
+    automatic_tax: { enabled: autoTax() },
   })
   syncSubscription(updated)
   return { ok: true }
@@ -332,6 +391,7 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
         const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
         const sub = await stripe().subscriptions.retrieve(subId)
         workspaceId = syncSubscription(sub)?.id ?? null
+        await attachAccountTaxId(subId)
       }
       break
     }
@@ -350,6 +410,7 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
       amount = event.type === 'invoice.paid' ? inv.amount_paid : 0
       currency = inv.currency
       if (ws && event.type === 'invoice.payment_failed') repo.updateWorkspace(ws.id, { status: 'past_due' })
+      if (event.type === 'invoice.paid' && inv.amount_paid > 0) await mailInvoice(inv, ws)
       break
     }
   }
@@ -362,4 +423,24 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
     nowIso(),
   ])
   return { ok: true, status: 200, message: 'ok' }
+}
+
+/** Factura por correo al cobrarla: número, importe y enlace al PDF de Stripe. */
+async function mailInvoice(inv: Stripe.Invoice, ws: Workspace | null) {
+  const to = inv.customer_email
+  if (!to || !inv.invoice_pdf) return
+  const es = (ws?.language ?? 'es') === 'es'
+  const total = (inv.amount_paid / 100).toLocaleString(es ? 'es-ES' : 'en-US', { style: 'currency', currency: inv.currency.toUpperCase() })
+  const { sendEmail, appUrl } = await import('./email')
+  await sendEmail({
+    to,
+    subject: es ? `Tu factura de Placton${inv.number ? ` nº ${inv.number}` : ''}` : `Your Placton invoice${inv.number ? ` ${inv.number}` : ''}`,
+    kind: 'factura',
+    title: es ? 'Gracias por tu pago' : 'Thanks for your payment',
+    body: es
+      ? `Hemos cobrado ${total} de tu suscripción a Placton${ws ? ` (${ws.name})` : ''}. Aquí tienes la factura${inv.number ? ` nº ${inv.number}` : ''}.\n\nTambién están todas en Ajustes, Suscripción, en ${appUrl()}/dashboard/settings/billing.`
+      : `We've charged ${total} for your Placton subscription${ws ? ` (${ws.name})` : ''}. Here is your invoice${inv.number ? ` ${inv.number}` : ''}.\n\nYou can also find all of them under Settings, Billing, at ${appUrl()}/dashboard/settings/billing.`,
+    cta: { label: es ? 'Descargar la factura (PDF)' : 'Download the invoice (PDF)', url: inv.invoice_pdf },
+    lang: es ? 'es' : 'en',
+  }).catch((err) => console.error('[placton] correo de factura', err))
 }
