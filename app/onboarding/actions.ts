@@ -1,6 +1,6 @@
 'use server'
 
-import { trialAlreadyUsed } from '@/lib/abuse'
+import { trialBlockReason } from '@/lib/abuse'
 import { reportError } from '@/lib/monitor'
 import { analyzeBrand, peekSite, suggestPrompts, type BrandProfile, type SuggestedPrompt } from '@/lib/ai'
 import { requireUser } from '@/lib/auth'
@@ -96,7 +96,7 @@ export interface FinishPayload {
   leftovers: SuggestedPrompt[]
 }
 
-export async function finishAction(payload: FinishPayload): Promise<{ error: string } | { ok: true; runId: number | null }> {
+export async function finishAction(payload: FinishPayload): Promise<{ error: string } | { ok: true; runId: number | null; trialUsed?: 'persona' | 'web' }> {
   const { ws, userId } = await draftWorkspace()
   const { t } = await getT()
   const brandName = payload.brandName.trim().slice(0, 80)
@@ -123,9 +123,10 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
   // Una sola prueba gratis por web: si otra cuenta ya la usó, este espacio
   // empieza sin prueba (el panel le pide elegir un plan) y no se gasta API.
   const fresh = repo.workspaceById(ws.id)!
-  if (fresh.plan === 'trial' && !fresh.billingOwnerId && trialAlreadyUsed(fresh)) {
+  const blocked = fresh.plan === 'trial' && !fresh.billingOwnerId ? trialBlockReason(fresh) : null
+  if (blocked) {
     repo.updateWorkspace(ws.id, { trialEndsAt: new Date().toISOString() })
-    return { ok: true, runId: null }
+    return { ok: true, runId: null, trialUsed: blocked }
   }
 
   const { runId } = startRun(ws.id, 'alta')

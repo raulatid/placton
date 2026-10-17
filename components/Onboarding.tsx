@@ -15,7 +15,7 @@ import { BrandAvatar, PlatformDot, cx } from './ui'
 // tarjeta y se puede volver atrás sin perder nada.
 
 
-type Step = 'web' | 'competitors' | 'prompts' | 'setup'
+type Step = 'web' | 'competitors' | 'prompts' | 'setup' | 'sin-prueba'
 
 interface Competitor {
   name: string
@@ -163,6 +163,7 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
   const [warning, setWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [trialUsed, setTrialUsed] = useState<'persona' | 'web' | null>(null)
 
   // Al panel con una carga completa: el router del cliente puede tener guardada
   // la versión de /dashboard de antes de terminar el alta (que manda aquí) y
@@ -227,6 +228,10 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
     })
     setSaving(false)
     if ('error' in res) return setError(res.error)
+    if (res.trialUsed) {
+      setTrialUsed(res.trialUsed)
+      return setStep('sin-prueba')
+    }
     setStep('setup')
   }
 
@@ -395,6 +400,33 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
       )}
 
       {step === 'setup' && <Setup onDone={goToDashboard} />}
+      {step === 'sin-prueba' && (
+        <div className="flex min-h-[62vh] flex-col items-center justify-center text-center">
+          <Heading
+            k="sin-prueba"
+            title={trialUsed === 'web' ? t('This website already had its free trial', 'Esta web ya tuvo su prueba gratis') : t("You've already used your free trial", 'Ya has usado tu prueba gratis')}
+            sub={
+              trialUsed === 'web'
+                ? t(
+                    'The free trial is one per website, and another account already used it. Your workspace is ready with its prompts and competitors: choose a plan and we start tracking right away.',
+                    'La prueba gratis es una por web y otra cuenta ya la usó. Tu espacio está listo con sus prompts y competidores: elige un plan y empezamos a medir enseguida.',
+                  )
+                : t(
+                    'The free trial is one per person, and you used it with your first workspace. This one is ready with its prompts and competitors: choose a plan and we start tracking right away.',
+                    'La prueba gratis es una por persona y ya la usaste con tu primer espacio. Este está listo con sus prompts y competidores: elige un plan y empezamos a medir enseguida.',
+                  )
+            }
+          />
+          <button
+            type="button"
+            onClick={() => window.location.assign('/dashboard/plans')}
+            className="anim-rise mt-8 h-12 rounded-full bg-deep px-7 text-[15px] font-semibold text-white transition-colors hover:bg-deep-2"
+            style={{ '--i': 2 } as React.CSSProperties}
+          >
+            {t('Choose a plan', 'Elegir un plan')}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

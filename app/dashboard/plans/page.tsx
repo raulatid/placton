@@ -9,6 +9,7 @@ import * as repo from '@/lib/repo'
 import { stripeReady } from '@/lib/stripe'
 import { checkoutAction, portalAction } from '../actions'
 import { planName } from '@/lib/plans'
+import { trialBlockReason } from '@/lib/abuse'
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -24,12 +25,28 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
   const access = repo.accessOf(payer)
   const current = payer.plan !== 'trial' && access.ok ? { plan: payer.plan, interval: payer.billingInterval } : null
   const agencyNow = payer.plan === 'agencia' && access.ok ? { clients: payer.seats, prompts: payer.promptPool } : null
+  // Espacio que empezó sin prueba (la web o la persona ya la habían usado): su
+  // prueba «terminó» el mismo día en que se creó.
+  const noTrial =
+    payer.plan === 'trial' && access.reason === 'trial_ended' && payer.trialEndsAt && new Date(payer.trialEndsAt).getTime() - new Date(payer.createdAt).getTime() < 86_400_000
+      ? trialBlockReason(payer) ?? 'persona'
+      : null
   return (
     <>
       <PageHeader
         title={t('Choose your plan', 'Elige tu plan')}
         hint={
-          access.reason === 'trial_ended'
+          noTrial
+            ? noTrial === 'web'
+              ? t(
+                  'This website already had its free trial with another account. Your workspace is ready: choose a plan and tracking starts right away.',
+                  'Esta web ya tuvo su prueba gratis con otra cuenta. Tu espacio está listo: elige un plan y empezamos a medir enseguida.',
+                )
+              : t(
+                  'The free trial is one per person and you already used it. This workspace is ready: choose a plan and tracking starts right away.',
+                  'La prueba gratis es una por persona y ya la usaste. Este espacio está listo: elige un plan y empezamos a medir enseguida.',
+                )
+            : access.reason === 'trial_ended'
             ? t(
                 "Your trial has ended. Your data is still here: choose a plan and tracking starts again right away.",
                 'Tu prueba ha terminado. Tus datos siguen aquí: elige un plan y volvemos a medir enseguida.',

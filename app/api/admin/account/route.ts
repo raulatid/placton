@@ -14,7 +14,19 @@ export async function POST(req: NextRequest) {
   if (!secret || got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
-  const { email } = (await req.json().catch(() => ({}))) as { email?: string }
+  const { email, recent } = (await req.json().catch(() => ({}))) as { email?: string; recent?: boolean }
+  if (recent) {
+    const users = all<{ id: number; email: string; createdAt: string }>('SELECT id, email, createdAt FROM users ORDER BY id DESC LIMIT 5')
+    return NextResponse.json(
+      users.map((u) => ({
+        ...u,
+        spaces: all<{ id: number; name: string; domain: string; onboarded: number; plan: string; trialEndsAt: string | null; createdAt: string; runs: number }>(
+          "SELECT w.id, w.name, w.domain, w.onboarded, w.plan, w.trialEndsAt, w.createdAt, (SELECT COUNT(*) FROM runs r WHERE r.workspaceId = w.id) AS runs FROM members m JOIN workspaces w ON w.id = m.workspaceId WHERE m.userId = ? AND m.role = 'owner'",
+          [u.id],
+        ),
+      })),
+    )
+  }
   const e = String(email ?? '').trim().toLowerCase()
   const user = one<{ id: number; createdAt: string; passwordHash: string | null; googleId: string | null; currentWorkspaceId: number | null }>(
     'SELECT id, createdAt, passwordHash, googleId, currentWorkspaceId FROM users WHERE lower(email) = ?',

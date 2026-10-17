@@ -32,19 +32,28 @@ export function recordSignup(ip: string) {
   run('INSERT INTO signup_log (ipHash, createdAt) VALUES (?, ?)', [ipHash(ip), nowIso()])
 }
 
-/** ¿Otro espacio (de cualquier cuenta) ya usó la prueba gratis con esta web? */
+/**
+ * Por qué un espacio no estrena prueba gratis: «persona» si quien lo crea ya
+ * tiene otro espacio suyo terminado, «web» si otra cuenta ya probó ese dominio.
+ * Las cuentas de administración siempre la tienen (para poder probar).
+ */
+export function trialBlockReason(ws: Workspace): 'persona' | 'web' | null {
+  if (ws.createdBy) {
+    const creator = one<{ email: string }>('SELECT email FROM users WHERE id = ?', [ws.createdBy])
+    const admins = (process.env.PLACTON_ADMIN_EMAILS ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+    if (creator && admins.includes(creator.email.toLowerCase())) return null
+    if (
+      all<{ id: number }>(
+        "SELECT w.id FROM workspaces w JOIN members m ON m.workspaceId = w.id AND m.userId = ? AND m.role = 'owner' WHERE w.id <> ? AND w.onboarded = 1 AND w.billingOwnerId IS NULL LIMIT 1",
+        [ws.createdBy, ws.id],
+      ).length
+    )
+      return 'persona'
+  }
+  if (ws.domain && all<{ id: number }>('SELECT id FROM workspaces WHERE domain = ? AND id <> ? AND onboarded = 1 LIMIT 1', [ws.domain, ws.id]).length) return 'web'
+  return null
+}
+
 export function trialAlreadyUsed(ws: Workspace): boolean {
-  // Una prueba por persona: quien ya tiene otro espacio suyo terminado no estrena prueba.
-  if (
-    ws.createdBy &&
-    all<{ id: number }>(
-      "SELECT w.id FROM workspaces w JOIN members m ON m.workspaceId = w.id AND m.userId = ? AND m.role = 'owner' WHERE w.id <> ? AND w.onboarded = 1 AND w.billingOwnerId IS NULL LIMIT 1",
-      [ws.createdBy, ws.id],
-    ).length
-  )
-    return true
-  if (!ws.domain) return false
-  return Boolean(
-    all<{ id: number }>("SELECT id FROM workspaces WHERE domain = ? AND id <> ? AND onboarded = 1 LIMIT 1", [ws.domain, ws.id]).length,
-  )
+  return trialBlockReason(ws) !== null
 }
