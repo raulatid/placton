@@ -314,6 +314,11 @@ export function db(): DatabaseSync {
     'ALTER TABLE workspaces ADD COLUMN logoUpdatedAt TEXT',
     // Analítica: tipo de dispositivo de cada visita (móvil, tableta u ordenador).
     "ALTER TABLE page_views ADD COLUMN device TEXT NOT NULL DEFAULT ''",
+    // Respuestas compartidas: la misma pregunta, plataforma, país e idioma en la
+    // misma semana se pregunta una vez y se reutiliza para los demás espacios.
+    'ALTER TABLE answers ADD COLUMN promptKey TEXT',
+    'ALTER TABLE answers ADD COLUMN reusedFrom INTEGER',
+    'CREATE INDEX IF NOT EXISTS idx_answers_pool ON answers(promptKey, engine, day)',
   ]) {
     try {
       conn.exec(sql)

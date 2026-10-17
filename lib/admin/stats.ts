@@ -181,7 +181,7 @@ export interface Report {
   realDaily: { label: string; real: number }[]
   planEconomics: { plan: string; customers: number; mrr: number; apiPerCustomer: number; margin: number | null }[]
   // Uso
-  usage: { activeSpaces: number; prompts: number; answers: number; runsOk: number; runsError: number; mentions: number; ideas: number; audits: number; members: number }
+  usage: { activeSpaces: number; prompts: number; answers: number; reused: number; saved: number; runsOk: number; runsError: number; mentions: number; ideas: number; audits: number; members: number }
   customersTable: CustomerRow[]
 }
 
@@ -516,6 +516,13 @@ export function buildReport(p: Period, ext: { stripe: StripeData | null; openrou
     activeSpaces: count('SELECT COUNT(DISTINCT workspaceId) AS n FROM runs WHERE day >= ?', [addDays(today(), -8)]),
     prompts: count('SELECT COUNT(*) AS n FROM prompts WHERE active = 1'),
     answers: count('SELECT COUNT(*) AS n FROM answers WHERE day BETWEEN ? AND ?', [p.from, p.to]),
+    reused: count('SELECT COUNT(*) AS n FROM answers WHERE day BETWEEN ? AND ? AND reusedFrom IS NOT NULL', [p.from, p.to]),
+    // Ahorro: lo que habría costado cada respuesta reutilizada (lo que costó la original).
+    saved:
+      one<{ s: number }>(
+        'SELECT COALESCE(SUM(o.costUsd - a.costUsd), 0) AS s FROM answers a JOIN answers o ON o.id = a.reusedFrom WHERE a.day BETWEEN ? AND ? AND a.reusedFrom IS NOT NULL',
+        [p.from, p.to],
+      )?.s ?? 0,
     runsOk: count("SELECT COUNT(*) AS n FROM runs WHERE day BETWEEN ? AND ? AND status = 'ok'", [p.from, p.to]),
     runsError: count("SELECT COUNT(*) AS n FROM runs WHERE day BETWEEN ? AND ? AND status = 'error'", [p.from, p.to]),
     mentions: count('SELECT COUNT(*) AS n FROM mentions WHERE day BETWEEN ? AND ?', [p.from, p.to]),

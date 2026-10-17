@@ -1,6 +1,6 @@
 import 'server-only'
 import { addDays, all, nowIso, one, run, today } from './db'
-import { ask, enginesFor, platformById, type Platform } from './engines'
+import { ask, enginesFor, getGoogleTask, platformById, postGoogleTasks, type AskResult, type Platform } from './engines'
 import { extract } from './extract'
 import { refreshInsights } from './insights'
 import * as repo from './repo'
@@ -126,11 +126,70 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
   return { runId }
 }
 
+/** Clave de la pregunta para compartir respuestas: texto normalizado + país + idioma. */
+export function promptKey(text: string, country: string, language: string): string {
+  const t = text.toLowerCase().replace(/\s+/g, ' ').replace(/^[¿¡\s]+|[?!.\s]+$/g, '').trim()
+  return `${t}|${country.toLowerCase()}|${language.toLowerCase()}`
+}
+
+/**
+ * Respuesta ya obtenida esta semana por otro espacio para la misma pregunta,
+ * plataforma, país e idioma. Las IA no saben quién pregunta: la respuesta es la
+ * misma muestra que habría salido, sin volver a pagar la búsqueda. Solo se
+ * repite el análisis, que depende de las marcas que sigue cada espacio.
+ */
+function sharedAnswer(key: string, engine: string, wsId: number, day: string): (AskResult & { sourceId: number }) | null {
+  if (process.env.PLACTON_SHARE_ANSWERS === '0') return null
+  const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
+  const a = one<{ id: number; reusedFrom: number | null; text: string; model: string; empty: number; searchQueries: string }>(
+    'SELECT id, reusedFrom, text, model, empty, searchQueries FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1',
+    [key, engine, since, day, wsId],
+  )
+  if (!a) return null
+  const citations = all<{ url: string; title: string }>('SELECT url, title FROM citations WHERE answerId = ? ORDER BY id', [a.id])
+  let searchQueries: string[] = []
+  try {
+    searchQueries = JSON.parse(a.searchQueries)
+  } catch {}
+  return { text: a.text, citations, searchQueries, model: a.model, costUsd: 0, empty: Boolean(a.empty), sourceId: a.reusedFrom ?? a.id }
+}
+
 async function execute(ws: Workspace, runId: number, day: string, cells: Cell[], trigger: Run['trigger']) {
   const brands = repo.trackedBrands(ws)
   let done = 0
   let costUsd = 0
-  const queue = [...cells]
+  const ctx = { country: ws.country, language: ws.language }
+  const beat = () => run('UPDATE runs SET heartbeatAt = ? WHERE id = ?', [nowIso(), runId])
+
+  // 1) Lo que otro espacio ya preguntó esta semana no se vuelve a pagar.
+  const keyOf = (c: Cell) => promptKey(c.prompt.text, ws.country, ws.language)
+  const shared = new Map<Cell, AskResult & { sourceId: number }>()
+  for (const c of cells) {
+    const hit = sharedAnswer(keyOf(c), c.platform.id, ws.id, day)
+    if (hit) shared.set(c, hit)
+  }
+
+  // 2) En la medición semanal, Google va por la cola normal de DataForSEO (más
+  //    barata): se encargan todas las búsquedas ahora y se recogen al final.
+  const queued = new Map<Cell, { id: string; cost: number }>()
+  const googleCells = cells.filter((c) => c.platform.id === 'google' && c.platform.model === 'ai-overview' && !shared.has(c))
+  if (trigger === 'diario' && googleCells.length && process.env.PLACTON_GOOGLE_QUEUE !== '0') {
+    try {
+      const tasks = await postGoogleTasks(
+        googleCells.map((c) => ({ tag: String(c.prompt.id), prompt: c.prompt.text })),
+        ctx,
+      )
+      for (const c of googleCells) {
+        const t = tasks.get(String(c.prompt.id))
+        if (t) queued.set(c, t)
+      }
+    } catch (err) {
+      console.error('[placton] cola de Google, se usa la búsqueda al momento', err)
+    }
+  }
+
+  // Las búsquedas encargadas a la cola, al final: así tienen tiempo de estar hechas.
+  const queue = [...cells.filter((c) => !queued.has(c)), ...cells.filter((c) => queued.has(c))]
 
   const worker = async () => {
     while (queue.length) {
@@ -139,7 +198,16 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
       const { prompt, platform } = cell
       const started = Date.now()
       try {
-        const res = await ask(platform, prompt.text, { country: ws.country, language: ws.language })
+        const reuse = shared.get(cell)
+        const task = queued.get(cell)
+        const res = reuse
+          ? reuse
+          : task
+            ? await getGoogleTask(task, prompt.text, beat).catch((err) => {
+                console.error('[placton] búsqueda en cola fallida, se repite al momento', err)
+                return ask(platform, prompt.text, ctx)
+              })
+            : await ask(platform, prompt.text, ctx)
         const analysis = res.empty ? { mentions: [], citations: [], costUsd: 0 } : await extract(prompt.text, res.text, res.citations, brands)
         const cellCost = res.costUsd + analysis.costUsd
         costUsd += cellCost
@@ -147,9 +215,24 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
         // Si un reintento del mismo día deja una celda con error previo, se sustituye.
         run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ?', [ws.id, day, prompt.id, platform.id])
         const { id: answerId } = run(
-          `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, text, empty, searchQueries, latencyMs, costUsd, createdAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [runId, ws.id, prompt.id, platform.id, res.model, day, res.text, res.empty ? 1 : 0, JSON.stringify(res.searchQueries), Date.now() - started, cellCost, nowIso()],
+          `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, text, empty, searchQueries, latencyMs, costUsd, promptKey, reusedFrom, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            runId,
+            ws.id,
+            prompt.id,
+            platform.id,
+            res.model,
+            day,
+            res.text,
+            res.empty ? 1 : 0,
+            JSON.stringify(res.searchQueries),
+            Date.now() - started,
+            cellCost,
+            keyOf(cell),
+            reuse ? reuse.sourceId : null,
+            nowIso(),
+          ],
         )
         for (const m of analysis.mentions) {
           run(

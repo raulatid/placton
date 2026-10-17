@@ -411,7 +411,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <Mini label="Espacios activos" value={int(r.usage.activeSpaces)} hint="Con una medición en los últimos 8 días" />
             <Mini label="Prompts activos" value={int(r.usage.prompts)} />
-            <Mini label="Respuestas medidas" value={int(r.usage.answers)} />
+            <Mini label="Respuestas medidas" value={int(r.usage.answers)} hint={r.usage.reused ? `${int(r.usage.reused)} reutilizadas, ${usd(r.usage.saved)} ahorrados` : 'Ninguna reutilizada todavía'} />
             <Mini label="Menciones encontradas" value={int(r.usage.mentions)} />
             <Mini label="Mediciones" value={int(r.usage.runsOk)} hint={r.usage.runsError ? `${int(r.usage.runsError)} con error` : 'Ninguna con error'} />
             <Mini label="Ideas generadas" value={int(r.usage.ideas)} />

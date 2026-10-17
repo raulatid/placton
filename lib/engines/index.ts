@@ -338,32 +338,26 @@ async function askGoogleOverview(prompt: string, ctx: AskContext): Promise<AskRe
   }
 }
 
-async function askGoogleOverviewOnce(prompt: string, ctx: AskContext): Promise<AskResult> {
-  const auth = Buffer.from(`${env('DATAFORSEO_LOGIN')}:${env('DATAFORSEO_PASSWORD')}`).toString('base64')
-  const res = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
-    method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([
-      {
-        keyword: prompt.slice(0, 700),
-        location_code: LOCATION_CODES[countryCode(ctx.country)] ?? 2724,
-        language_code: ctx.language || 'es',
-        device: 'desktop',
-        depth: 10,
-        load_async_ai_overview: true,
-      },
-    ]),
-    signal: ctx.signal,
-  })
-  if (!res.ok) throw new Error(`DataForSEO ${res.status}`)
-  const json = (await res.json()) as {
-    cost?: number
-    tasks?: { status_code: number; status_message: string; result?: { items?: DfsItem[] }[] }[]
+const dfsHeaders = () => ({
+  Authorization: `Basic ${Buffer.from(`${env('DATAFORSEO_LOGIN')}:${env('DATAFORSEO_PASSWORD')}`).toString('base64')}`,
+  'Content-Type': 'application/json',
+})
+
+/** Búsqueda de Google con su AI Overview, en el país e idioma del espacio. */
+function dfsTask(prompt: string, ctx: AskContext) {
+  return {
+    keyword: prompt.slice(0, 700),
+    location_code: LOCATION_CODES[countryCode(ctx.country)] ?? 2724,
+    language_code: ctx.language || 'es',
+    device: 'desktop',
+    depth: 10,
+    load_async_ai_overview: true,
   }
-  const task = json.tasks?.[0]
-  if (!task || task.status_code !== 20000) throw new Error(`DataForSEO: ${task?.status_message ?? 'sin respuesta'}`)
-  const overview = task.result?.[0]?.items?.find((i) => i.type === 'ai_overview')
-  const costUsd = json.cost ?? 0.004
+}
+
+/** Convierte el resultado de DataForSEO en respuesta: el AI Overview (o vacío si Google no lo enseña). */
+function overviewResult(items: DfsItem[] | undefined, prompt: string, costUsd: number): AskResult {
+  const overview = items?.find((i) => i.type === 'ai_overview')
   if (!overview) {
     return { text: '', citations: [], searchQueries: [prompt], model: 'ai-overview', costUsd, empty: true }
   }
@@ -383,6 +377,63 @@ async function askGoogleOverviewOnce(prompt: string, ctx: AskContext): Promise<A
   // Los enlaces de cita en línea ([[1]](url)) solo meten ruido en el texto.
   const text = raw.replace(/\[\[\d+\]\]\([^)]*\)/g, '').replace(/`/g, '').trim()
   return { text, citations, searchQueries: [prompt], model: 'ai-overview', costUsd, empty: !text }
+}
+
+async function askGoogleOverviewOnce(prompt: string, ctx: AskContext): Promise<AskResult> {
+  const res = await fetch('https://api.dataforseo.com/v3/serp/google/organic/live/advanced', {
+    method: 'POST',
+    headers: dfsHeaders(),
+    body: JSON.stringify([dfsTask(prompt, ctx)]),
+    signal: ctx.signal,
+  })
+  if (!res.ok) throw new Error(`DataForSEO ${res.status}`)
+  const json = (await res.json()) as {
+    cost?: number
+    tasks?: { status_code: number; status_message: string; result?: { items?: DfsItem[] }[] }[]
+  }
+  const task = json.tasks?.[0]
+  if (!task || task.status_code !== 20000) throw new Error(`DataForSEO: ${task?.status_message ?? 'sin respuesta'}`)
+  return overviewResult(task.result?.[0]?.items, prompt, json.cost ?? 0.004)
+}
+
+/*
+ * Cola normal de DataForSEO para la medición semanal: cuesta ~70 % menos que
+ * «live» (0,0006 $ frente a 0,002 $ por búsqueda) y tarda unos minutos. Se
+ * encargan todas las búsquedas de Google de la medición al empezar y se recogen
+ * al final, cuando ya están hechas.
+ */
+export async function postGoogleTasks(jobs: { tag: string; prompt: string }[], ctx: AskContext): Promise<Map<string, { id: string; cost: number }>> {
+  const out = new Map<string, { id: string; cost: number }>()
+  for (let i = 0; i < jobs.length; i += 100) {
+    const batch = jobs.slice(i, i + 100)
+    const res = await fetch('https://api.dataforseo.com/v3/serp/google/organic/task_post', {
+      method: 'POST',
+      headers: dfsHeaders(),
+      body: JSON.stringify(batch.map((j) => ({ ...dfsTask(j.prompt, ctx), tag: j.tag }))),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`DataForSEO ${res.status}`)
+    const json = (await res.json()) as { tasks?: { id: string; status_code: number; cost?: number; data?: { tag?: string } }[] }
+    for (const t of json.tasks ?? []) if (t.status_code === 20100 && t.data?.tag) out.set(t.data.tag, { id: t.id, cost: t.cost ?? 0.0006 })
+  }
+  return out
+}
+
+/** Recoge una búsqueda encargada a la cola; espera mientras se hace (hasta 30 minutos). */
+export async function getGoogleTask(task: { id: string; cost: number }, prompt: string, onWait?: () => void): Promise<AskResult> {
+  const deadline = Date.now() + 30 * 60_000
+  while (Date.now() < deadline) {
+    const res = await fetch(`https://api.dataforseo.com/v3/serp/google/organic/task_get/advanced/${task.id}`, { headers: dfsHeaders(), signal: AbortSignal.timeout(30_000) })
+    if (!res.ok) throw new Error(`DataForSEO ${res.status}`)
+    const json = (await res.json()) as { tasks?: { status_code: number; status_message: string; result?: { items?: DfsItem[] }[] }[] }
+    const t = json.tasks?.[0]
+    if (t?.status_code === 20000) return overviewResult(t.result?.[0]?.items, prompt, task.cost)
+    // 40601/40602: en cola o en proceso. Cualquier otro código es un error de verdad.
+    if (t && t.status_code !== 40601 && t.status_code !== 40602) throw new Error(`DataForSEO: ${t.status_message}`)
+    onWait?.()
+    await new Promise((r) => setTimeout(r, 15_000))
+  }
+  throw new Error('DataForSEO: la búsqueda en cola no terminó a tiempo')
 }
 
 /* ───────────── Google Gemini con búsqueda (alternativa) ───────────── */
