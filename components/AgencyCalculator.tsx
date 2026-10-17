@@ -23,7 +23,7 @@ import { IconCheck } from './icons'
 import { useLang, useT } from './LangProvider'
 import { cx } from './ui'
 
-const PROMPT_PRESETS = [100, 250, 500, 1000, 2500]
+const PROMPT_PRESETS = [20, 100, 250, 500, 1000]
 
 function Stepper({ value, onChange, min, max, step, label, unit }: { value: number; onChange: (n: number) => void; min: number; max: number; step: number; label: string; unit: string }) {
   const t = useT()

@@ -67,7 +67,7 @@ export const PLANS: Record<PlanId, Plan> = {
     nameEs: 'Agencia',
     tagline: bi('For agencies tracking several client brands', 'Para agencias que siguen varias marcas cliente'),
     // Los prompts los da la bolsa contratada (ver agencyQuote); esto es solo el mínimo.
-    prompts: 50,
+    prompts: 20,
     members: null,
     monthly: 15,
     yearly: yearlyFrom(15),
@@ -96,9 +96,10 @@ export const PAID_PLANS: Exclude<PaidPlanId, 'agencia'>[] = ['inicial', 'crecimi
 
 export const AGENCY_MIN = 3
 export const AGENCY_MAX = 100
-export const AGENCY_PROMPTS_MIN = 50
+// Desde 20 prompts (lo de un proyecto pequeño), de 10 en 10.
+export const AGENCY_PROMPTS_MIN = 20
 export const AGENCY_PROMPTS_MAX = 5000
-export const AGENCY_PROMPTS_STEP = 25
+export const AGENCY_PROMPTS_STEP = 10
 
 /** Cuota mensual por marca cliente (espacio, competidores, informes). */
 export const AGENCY_CLIENT_MONTHLY = 15
