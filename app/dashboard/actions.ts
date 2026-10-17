@@ -1,5 +1,6 @@
 'use server'
 
+import { resolveCompetitorDomain } from '@/lib/brandDomain'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -149,13 +150,16 @@ export async function addCompetitorAction(_: ActionResult, fd: FormData): Promis
     .filter(Boolean)
   const id = repo.addCompetitor(workspace.id, name, s(fd, 'domain'), aliases)
   if (!id) return { error: t('That competitor is already on the list.', 'Ese competidor ya está en la lista.') }
+  if (!s(fd, 'domain')) await resolveCompetitorDomain(workspace.id, id)
   revalidatePath('/dashboard/competitors')
   return { ok: t(`${name} added. You'll see it in new runs.`, `${name} añadido. Lo verás en las mediciones nuevas.`) }
 }
 
 export async function quickAddCompetitorAction(fd: FormData) {
   const { workspace } = await requireCtx()
-  repo.addCompetitor(workspace.id, s(fd, 'name'), s(fd, 'domain'))
+  const id = repo.addCompetitor(workspace.id, s(fd, 'name'), s(fd, 'domain'))
+  // Sin web no hay logo: se busca al momento (fuentes ya citadas o una búsqueda corta).
+  if (id && !s(fd, 'domain')) await resolveCompetitorDomain(workspace.id, id)
   revalidatePath('/dashboard/competitors')
   revalidatePath('/dashboard')
 }

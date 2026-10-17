@@ -292,6 +292,8 @@ export function db(): DatabaseSync {
     // Avisos de la prueba gratis ya enviados (2 días antes y al terminar).
     'ALTER TABLE workspaces ADD COLUMN trialReminderAt TEXT',
     'ALTER TABLE workspaces ADD COLUMN trialEndedMailAt TEXT',
+    // Competidores añadidos sin web: cuándo se buscó su dominio (para no repetir).
+    'ALTER TABLE competitors ADD COLUMN domainCheckedAt TEXT',
   ]) {
     try {
       conn.exec(sql)

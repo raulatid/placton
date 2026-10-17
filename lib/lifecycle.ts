@@ -22,6 +22,12 @@ export async function runLifecycle() {
   } catch (err) {
     reportError(err, 'lifecycle:dns')
   }
+  try {
+    const { fillMissingDomains } = await import('./brandDomain')
+    await fillMissingDomains()
+  } catch (err) {
+    reportError(err, 'lifecycle:webs de competidores')
+  }
 }
 
 function ownerOf(wsId: number) {
