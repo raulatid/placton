@@ -1,3 +1,4 @@
+import { Track } from '@/components/marketing/Track'
 import Link from 'next/link'
 import { LangSwitch } from '@/components/LangSwitch'
 import { Logo } from '@/components/Logo'
@@ -36,7 +37,8 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
           <LangSwitch className="ml-1" />
         </nav>
       </header>
-      <main className="flex flex-1 flex-col items-center px-4 pb-10 pt-6 sm:pt-12">{children}</main>
+      <main className="flex flex-1 flex-col items-center px-4 pb-10 pt-6 sm:pt-12">{children}
+        <Track /></main>
       <footer className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 px-4 pb-8 text-[13px] font-semibold text-mute">
         {links.map((l) => (
           <Link key={l.href} href={l.href} className="hover:text-ink">

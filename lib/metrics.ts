@@ -28,7 +28,8 @@ export interface Range {
 }
 
 export function parseRange(raw: string | undefined): RangeId {
-  return raw === 'hoy' || raw === '7d' || raw === '30d' || raw === '90d' ? raw : '7d'
+  // 30 días por defecto: con la medición semanal, 7 días suele tener una sola pasada.
+  return raw === 'hoy' || raw === '7d' || raw === '30d' || raw === '90d' ? raw : '30d'
 }
 
 export function resolveRange(workspaceId: number, id: RangeId): Range {
@@ -184,29 +185,45 @@ export function brandStats(ws: Workspace, rangeId: RangeId): { range: Range; sea
 }
 
 /** Visibilidad por día y marca, para la vista de evolución. */
+/** Lunes de la semana de un día (YYYY-MM-DD). */
+function weekStart(day: string): string {
+  const d = new Date(`${day}T12:00:00Z`)
+  const dow = (d.getUTCDay() + 6) % 7
+  return addDays(day, -dow)
+}
+
+/**
+ * Evolución de la visibilidad por marca. En 7 días va por día; en 30 y 90, por
+ * semanas (lunes), que es el ritmo de la medición y no deja huecos en la gráfica.
+ */
 export function timeline(ws: Workspace, rangeId: RangeId): { days: string[]; series: { key: string; name: string; own: boolean; values: (number | null)[] }[] } {
   const range = resolveRange(ws.id, rangeId === 'hoy' ? '7d' : rangeId)
-  const perDay = new Map(
-    all<{ day: string; n: number }>(
-      'SELECT day, COUNT(*) AS n FROM answers WHERE workspaceId = ? AND day BETWEEN ? AND ? AND error IS NULL AND empty = 0 GROUP BY day',
-      [ws.id, range.from, range.to],
-    ).map((r) => [r.day, r.n]),
-  )
-  const hits = all<{ day: string; brandKey: string; n: number }>(
+  const weekly = rangeId === '30d' || rangeId === '90d'
+  const bucket = (d: string) => (weekly ? weekStart(d) : d)
+  const perBucket = new Map<string, number>()
+  for (const r of all<{ day: string; n: number }>(
+    'SELECT day, COUNT(*) AS n FROM answers WHERE workspaceId = ? AND day BETWEEN ? AND ? AND error IS NULL AND empty = 0 GROUP BY day',
+    [ws.id, range.from, range.to],
+  ))
+    perBucket.set(bucket(r.day), (perBucket.get(bucket(r.day)) ?? 0) + r.n)
+  const hits = new Map<string, number>()
+  for (const h of all<{ day: string; brandKey: string; n: number }>(
     'SELECT day, brandKey, COUNT(DISTINCT answerId) AS n FROM mentions WHERE workspaceId = ? AND day BETWEEN ? AND ? GROUP BY day, brandKey',
     [ws.id, range.from, range.to],
-  )
+  )) {
+    const k = `${bucket(h.day)}|${h.brandKey}`
+    hits.set(k, (hits.get(k) ?? 0) + h.n)
+  }
   const days: string[] = []
-  for (let d = range.from; d <= range.to; d = addDays(d, 1)) days.push(d)
+  for (let d = weekly ? weekStart(range.from) : range.from; d <= range.to; d = addDays(d, weekly ? 7 : 1)) days.push(d)
   const series = trackedBrands(ws).map((b) => ({
     key: b.key,
     name: b.name,
     own: b.own,
     values: days.map((d) => {
-      const total = perDay.get(d)
+      const total = perBucket.get(d)
       if (!total) return null
-      const n = hits.find((h) => h.day === d && h.brandKey === b.key)?.n ?? 0
-      return (n / total) * 100
+      return ((hits.get(`${d}|${b.key}`) ?? 0) / total) * 100
     }),
   }))
   return { days, series }

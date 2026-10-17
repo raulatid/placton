@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { recordSignup, signupAllowed } from '@/lib/abuse'
 import { startSession } from '@/lib/auth'
 import { appUrl, cookieDomain } from '@/lib/email'
 import { googleProfile } from '@/lib/google'
@@ -23,6 +24,9 @@ export async function GET(req: NextRequest) {
   let user = repo.userByGoogleId(profile.sub) ?? repo.userByEmail(profile.email)
   let isNew = false
   if (!user) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
+    if (!signupAllowed(ip)) return NextResponse.redirect(`${appUrl()}/login?error=limit`)
+    recordSignup(ip)
     user = repo.createUser({
       email: profile.email,
       firstName: profile.given_name ?? '',

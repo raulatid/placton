@@ -1,5 +1,6 @@
 'use server'
 
+import { clientIp, recordSignup, signupAllowed } from '@/lib/abuse'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import {
@@ -60,8 +61,11 @@ export async function registerAction(_: FormState, fd: FormData): Promise<FormSt
   const pwProblem = passwordProblem(password)
   if (pwProblem) return { error: t('Your password needs at least 8 characters.', pwProblem), fields }
   if (repo.userByEmail(email)) return { error: t('There is already an account with that email. Log in instead.', 'Ya hay una cuenta con ese correo. Entra con ella.'), fields }
+  const ip = await clientIp()
+  if (!signupAllowed(ip)) return { error: t('Too many new accounts from this connection today. Try again tomorrow or contact us.', 'Demasiadas cuentas nuevas desde esta conexión hoy. Prueba mañana o escríbenos.'), fields }
 
   const user = repo.createUser({ email, firstName, lastName, passwordHash: await hashPassword(password) })
+  recordSignup(ip)
   await startSession(user.id)
   void sendEmail({
     to: user.email,

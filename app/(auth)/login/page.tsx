@@ -27,7 +27,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </>
       }
     >
-      {error && <p className="mb-4 rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink-2 shadow-[inset_3px_0_0_#c2410c]">{t('Google sign-in failed. Please try again.', 'No se pudo entrar con Google. Inténtalo otra vez.')}</p>}
+      {error && <p className="mb-4 rounded-xl border border-line bg-white px-4 py-3 text-sm font-medium text-ink-2 shadow-[inset_3px_0_0_#c2410c]">{error === 'limit'
+            ? t('Too many new accounts from this connection today. Try again tomorrow or contact us.', 'Demasiadas cuentas nuevas desde esta conexión hoy. Prueba mañana o escríbenos.')
+            : t('Google sign-in failed. Please try again.', 'No se pudo entrar con Google. Inténtalo otra vez.')}</p>}
       <LoginForm google={googleReady()} invite={invite} />
     </AuthCard>
   )

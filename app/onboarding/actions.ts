@@ -1,5 +1,6 @@
 'use server'
 
+import { trialAlreadyUsed } from '@/lib/abuse'
 import { analyzeBrand, peekSite, suggestPrompts, type BrandProfile, type SuggestedPrompt } from '@/lib/ai'
 import { requireUser } from '@/lib/auth'
 import { availablePlatformIds } from '@/lib/engines'
@@ -114,6 +115,14 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
   for (const p of prompts.slice(0, limit)) repo.addPrompt(ws.id, p.text, p.topic || 'General', 'sugerido')
   repo.addSuggestions(ws.id, [...prompts.slice(limit), ...payload.leftovers].map((p) => ({ text: p.text, topic: p.topic || 'General', why: 'why' in p ? String(p.why) : '' })))
   repo.updateWorkspace(ws.id, { onboarded: true })
+
+  // Una sola prueba gratis por web: si otra cuenta ya la usó, este espacio
+  // empieza sin prueba (el panel le pide elegir un plan) y no se gasta API.
+  const fresh = repo.workspaceById(ws.id)!
+  if (fresh.plan === 'trial' && !fresh.billingOwnerId && trialAlreadyUsed(fresh)) {
+    repo.updateWorkspace(ws.id, { trialEndsAt: new Date().toISOString() })
+    return { ok: true, runId: null }
+  }
 
   const { runId } = startRun(ws.id, 'alta')
   return { ok: true, runId }

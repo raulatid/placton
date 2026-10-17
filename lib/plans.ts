@@ -77,7 +77,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: 'Scale',
     nameEs: 'Escala',
     tagline: bi('For agencies and brands with a wide catalogue', 'Para agencias y marcas con mucho catálogo'),
-    prompts: 300,
+    prompts: 250,
     members: null,
     monthly: 299,
     yearly: yearlyFrom(299),

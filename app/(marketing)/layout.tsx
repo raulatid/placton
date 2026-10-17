@@ -1,4 +1,5 @@
 import { SiteFooter } from '@/components/marketing/SiteFooter'
+import { Track } from '@/components/marketing/Track'
 import { SiteHeader } from '@/components/marketing/SiteHeader'
 import { getT } from '@/lib/i18n'
 
@@ -17,6 +18,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
         {children}
       </main>
       <SiteFooter />
+      <Track />
     </div>
   )
 }

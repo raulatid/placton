@@ -1,0 +1,20 @@
+# Vigilancia de caídas: cada 30 minutos comprueba la web y la app desde fuera.
+# Si alguna no responde, el trabajo falla y GitHub avisa por correo al dueño.
+name: Vigilancia placton.tech
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Web y app responden
+        run: |
+          set -e
+          for url in https://placton.tech/ https://app.placton.tech/login; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 --retry 2 --retry-delay 10 "$url")
+            echo "$url -> $code"
+            if [ "$code" != "200" ]; then echo "::error::$url responde $code"; exit 1; fi
+          done

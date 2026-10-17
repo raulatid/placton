@@ -12,8 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: t('Pricing', 'Precios'),
     description: t(
-      'Placton plans from $59 a month: 20, 75 or 300 prompts tracked every week on ChatGPT, Claude, Google AI and Perplexity. 7-day free trial, no card required.',
-      'Planes de Placton desde 59 $ al mes: 20, 75 o 300 prompts medidos cada semana en ChatGPT, Claude, Google AI y Perplexity. Prueba 7 días gratis, sin tarjeta.',
+      'Placton plans from $59 a month: 20, 75 or 250 prompts tracked every week on ChatGPT, Claude, Google AI and Perplexity. 7-day free trial, no card required.',
+      'Planes de Placton desde 59 $ al mes: 20, 75 o 250 prompts medidos cada semana en ChatGPT, Claude, Google AI y Perplexity. Prueba 7 días gratis, sin tarjeta.',
     ),
     alternates: { canonical: '/pricing' },
   }

@@ -235,6 +235,34 @@ CREATE TABLE IF NOT EXISTS billing_events (
   createdAt TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS signup_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ipHash TEXT NOT NULL,
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_signup_ip ON signup_log(ipHash, createdAt);
+
+CREATE TABLE IF NOT EXISTS page_views (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  day TEXT NOT NULL,
+  path TEXT NOT NULL,
+  refHost TEXT NOT NULL DEFAULT '',
+  utmSource TEXT NOT NULL DEFAULT '',
+  visitor TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT '',
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_page_views_day ON page_views(day);
+
+CREATE TABLE IF NOT EXISTS error_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  signature TEXT NOT NULL,
+  message TEXT NOT NULL,
+  path TEXT NOT NULL DEFAULT '',
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_error_log_created ON error_log(createdAt);
+
 CREATE TABLE IF NOT EXISTS email_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   toEmail TEXT NOT NULL,
@@ -261,6 +289,9 @@ export function db(): DatabaseSync {
     'ALTER TABLE workspaces ADD COLUMN billingOwnerId INTEGER',
     // Plan Agencia: bolsa de prompts diarios contratada (en el espacio que paga).
     'ALTER TABLE workspaces ADD COLUMN promptPool INTEGER NOT NULL DEFAULT 0',
+    // Avisos de la prueba gratis ya enviados (2 días antes y al terminar).
+    'ALTER TABLE workspaces ADD COLUMN trialReminderAt TEXT',
+    'ALTER TABLE workspaces ADD COLUMN trialEndedMailAt TEXT',
   ]) {
     try {
       conn.exec(sql)
