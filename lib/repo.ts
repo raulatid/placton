@@ -61,9 +61,38 @@ export function updateUser(id: number, fields: Partial<Pick<User, 'firstName' | 
   ])
 }
 
+/** Auditorías hechas por un espacio en la última hora (freno). */
+export function recentAudits(workspaceId: number): number {
+  return one<{ n: number }>('SELECT COUNT(*) AS n FROM audits WHERE workspaceId = ? AND createdAt > ?', [workspaceId, new Date(Date.now() - 3_600_000).toISOString()])?.n ?? 0
+}
+
+/** Invalida los enlaces de cambio de contraseña pendientes. */
+export function clearPasswordResets(userId: number) {
+  run('DELETE FROM password_resets WHERE userId = ?', [userId])
+}
+
 export function displayName(u: Pick<User, 'firstName' | 'lastName' | 'email'>): string {
   const full = `${u.firstName} ${u.lastName}`.trim()
   return full || u.email
+}
+
+/**
+ * Qué pasaría al borrar la cuenta: suscripciones a cancelar (espacios que se
+ * borran con ella) y espacios de pago compartidos de los que es propietario
+ * (esos no se pueden dejar cobrando a su tarjeta sin que nadie lo sepa).
+ */
+export function deletionPlan(userId: number): { cancel: string[]; sharedPaid: string[] } {
+  const cancel: string[] = []
+  const sharedPaid: string[] = []
+  for (const m of all<{ workspaceId: number; role: Role }>('SELECT workspaceId, role FROM members WHERE userId = ?', [userId])) {
+    const ws = workspaceById(m.workspaceId)
+    if (!ws) continue
+    const others = one<{ n: number }>('SELECT COUNT(*) AS n FROM members WHERE workspaceId = ? AND userId != ?', [ws.id, userId])?.n ?? 0
+    const live = ws.stripeSubscriptionId && ws.status !== 'canceled'
+    if (!others && live) cancel.push(ws.stripeSubscriptionId!)
+    if (others && live && m.role === 'owner') sharedPaid.push(ws.name)
+  }
+  return { cancel, sharedPaid }
 }
 
 /**
@@ -89,6 +118,11 @@ export function deleteUser(userId: number): { deletedWorkspaces: number[]; strip
       } else if (m.role === 'owner' && !others.some((o) => o.role === 'owner')) {
         run("UPDATE members SET role = 'owner' WHERE workspaceId = ? AND userId = ?", [m.workspaceId, others[0].userId])
       }
+    }
+    const email = one<{ email: string }>('SELECT email FROM users WHERE id = ?', [userId])?.email
+    if (email) {
+      run('DELETE FROM email_log WHERE lower(toEmail) = lower(?)', [email])
+      run('DELETE FROM contact_messages WHERE userId = ? OR lower(email) = lower(?)', [userId, email])
     }
     run('DELETE FROM users WHERE id = ?', [userId])
   })
@@ -150,7 +184,8 @@ export function createWorkspace(userId: number, name: string): Workspace {
       [name.trim() || 'My workspace', trialEnds, userId, nowIso()],
     )
     run("INSERT INTO members (workspaceId, userId, role, createdAt) VALUES (?, ?, 'owner', ?)", [id, userId, nowIso()])
-    run('UPDATE users SET currentWorkspaceId = ? WHERE id = ?', [id, userId])
+    // Solo el primero pasa a ser el actual; los siguientes, al terminar su alta.
+    run('UPDATE users SET currentWorkspaceId = ? WHERE id = ? AND currentWorkspaceId IS NULL', [id, userId])
     return id
   })
   return workspaceById(id)!
@@ -178,6 +213,7 @@ type WorkspaceEditable = Partial<{
   seats: number
   billingOwnerId: number | null
   promptPool: number
+  pastDueSince: string | null
 }>
 
 export function updateWorkspace(id: number, fields: WorkspaceEditable) {
@@ -194,6 +230,9 @@ export function updateWorkspace(id: number, fields: WorkspaceEditable) {
 }
 
 export function deleteWorkspace(id: number) {
+  // Los clientes de una agencia que se borra se quedan con sus datos y sin plan:
+  // pueden contratar el suyo propio.
+  run("UPDATE workspaces SET billingOwnerId = NULL, plan = 'trial', status = 'expired', trialEndsAt = ?, trialEndedMailAt = ? WHERE billingOwnerId = ? AND id <> ?", [nowIso(), nowIso(), id, id])
   run('DELETE FROM workspaces WHERE id = ?', [id])
   run('UPDATE users SET currentWorkspaceId = NULL WHERE currentWorkspaceId = ?', [id])
 }
@@ -201,16 +240,20 @@ export function deleteWorkspace(id: number) {
 /** ¿Puede el espacio medir y usar el panel? */
 export function accessOf(ws: Workspace): { ok: boolean; reason: 'trial' | 'active' | 'trial_ended' | 'canceled' | 'past_due' } {
   if (ws.billingOwnerId && ws.billingOwnerId !== ws.id) {
+    // Un cliente vale lo que valga la agencia que lo paga, y solo si sigue en el plan Agencia.
     const owner = workspaceById(ws.billingOwnerId)
-    return owner ? accessOf(owner) : { ok: false, reason: 'canceled' }
+    return owner && owner.plan === 'agencia' ? accessOf(owner) : { ok: false, reason: 'canceled' }
   }
   if (ws.plan === 'trial') {
     const live = ws.trialEndsAt && new Date(ws.trialEndsAt).getTime() > Date.now()
     return live ? { ok: true, reason: 'trial' } : { ok: false, reason: 'trial_ended' }
   }
   if (ws.status === 'active' || ws.status === 'trialing') return { ok: true, reason: 'active' }
-  // Un impago deja unos días de gracia mientras Stripe reintenta el cobro.
-  if (ws.status === 'past_due') return { ok: true, reason: 'past_due' }
+  // Un impago deja 14 días de gracia mientras Stripe reintenta el cobro; después, se corta.
+  if (ws.status === 'past_due') {
+    const since = ws.pastDueSince ? new Date(ws.pastDueSince).getTime() : Date.now()
+    return Date.now() - since < 14 * 86_400_000 ? { ok: true, reason: 'past_due' } : { ok: false, reason: 'past_due' }
+  }
   return { ok: false, reason: 'canceled' }
 }
 
@@ -271,12 +314,11 @@ export function createClientWorkspace(userId: number, owner: Workspace, name: st
       `INSERT INTO workspaces (name, plan, status, billingOwnerId, createdBy, createdAt) VALUES (?, 'agencia', 'active', ?, ?, ?)`,
       [name.trim() || 'New client', owner.id, userId, nowIso()],
     )
-    // Todo el equipo de la agencia entra también en el cliente, con su mismo papel.
+    // Quien lo crea es su propietario; el resto del equipo de la agencia entra con su mismo papel.
+    run("INSERT INTO members (workspaceId, userId, role, createdAt) VALUES (?, ?, 'owner', ?)", [id, userId, nowIso()])
     for (const m of membersOf(owner.id)) {
       run('INSERT OR IGNORE INTO members (workspaceId, userId, role, createdAt) VALUES (?, ?, ?, ?)', [id, m.userId, m.role, nowIso()])
     }
-    run("INSERT OR IGNORE INTO members (workspaceId, userId, role, createdAt) VALUES (?, ?, 'owner', ?)", [id, userId, nowIso()])
-    run('UPDATE users SET currentWorkspaceId = ? WHERE id = ?', [id, userId])
     return id
   })
   return workspaceById(id)
@@ -309,8 +351,15 @@ export function pendingInvites(workspaceId: number): Invite[] {
   return all<Invite>('SELECT * FROM invites WHERE workspaceId = ? AND acceptedAt IS NULL ORDER BY createdAt DESC', [workspaceId])
 }
 
+/** Invitación vigente: las de más de 14 días caducan (el enlace pudo acabar en cualquier sitio). */
 export function inviteByToken(token: string): Invite | null {
-  return one<Invite>('SELECT * FROM invites WHERE token = ?', [token])
+  if (!token) return null
+  return one<Invite>('SELECT * FROM invites WHERE token = ? AND createdAt > ?', [token, new Date(Date.now() - 14 * 86_400_000).toISOString()])
+}
+
+/** Invitaciones enviadas por un espacio en la última hora (freno al envío masivo). */
+export function recentInvites(workspaceId: number): number {
+  return one<{ n: number }>('SELECT COUNT(*) AS n FROM invites WHERE workspaceId = ? AND createdAt > ?', [workspaceId, new Date(Date.now() - 3_600_000).toISOString()])?.n ?? 0
 }
 
 export function createInvite(workspaceId: number, email: string, role: Role, invitedBy: number, token: string): Invite {
@@ -351,11 +400,22 @@ export function competitorsOf(workspaceId: number): Competitor[] {
   }))
 }
 
+export const MAX_COMPETITORS = 25
+
+/** ¿Choca este nombre con la marca propia o con otro competidor (salvo el que se edita)? */
+export function brandNameTaken(workspaceId: number, name: string, exceptCompetitorId?: number): boolean {
+  const k = key(name)
+  const ws = workspaceById(workspaceId)
+  if (ws && k && k === key(ws.brandName || ws.name)) return true
+  return competitorsOf(workspaceId).some((c) => c.id !== exceptCompetitorId && key(c.name) === k)
+}
+
 export function addCompetitor(workspaceId: number, name: string, domain: string, aliases: string[] = []): number | null {
-  const clean = name.trim()
-  if (!clean) return null
-  const exists = competitorsOf(workspaceId).some((c) => key(c.name) === key(clean) || (domain && c.domain === domainKey(domain)))
-  if (exists) return null
+  const clean = name.trim().slice(0, 80)
+  if (!clean || !key(clean)) return null
+  const list = competitorsOf(workspaceId)
+  if (list.length >= MAX_COMPETITORS) return null
+  if (brandNameTaken(workspaceId, clean) || (domain && list.some((c) => c.domain === domainKey(domain)))) return null
   return run('INSERT INTO competitors (workspaceId, name, domain, aliases, createdAt) VALUES (?, ?, ?, ?, ?)', [
     workspaceId,
     clean,
@@ -365,7 +425,21 @@ export function addCompetitor(workspaceId: number, name: string, domain: string,
   ]).id
 }
 
+/**
+ * Al renombrar una marca, su historial pasa a la clave nueva: las menciones y
+ * citas se guardan con la clave del nombre que tenía al medirse.
+ */
+export function rekeyBrand(workspaceId: number, oldName: string, newName: string) {
+  const from = key(oldName)
+  const to = key(newName)
+  if (!from || !to || from === to) return
+  run('UPDATE mentions SET brandKey = ? WHERE workspaceId = ? AND brandKey = ?', [to, workspaceId, from])
+  run('UPDATE citations SET brandKey = ? WHERE workspaceId = ? AND brandKey = ?', [to, workspaceId, from])
+}
+
 export function updateCompetitor(workspaceId: number, id: number, name: string, domain: string, aliases: string[]) {
+  const before = one<{ name: string }>('SELECT name FROM competitors WHERE id = ? AND workspaceId = ?', [id, workspaceId])
+  if (before) rekeyBrand(workspaceId, before.name, name)
   run('UPDATE competitors SET name = ?, domain = ?, aliases = ? WHERE id = ? AND workspaceId = ?', [
     name.trim(),
     domain ? domainKey(domain) : '',
@@ -410,7 +484,7 @@ interface PromptRow extends Omit<Prompt, 'active'> {
 
 export function promptsOf(workspaceId: number, onlyActive = false): Prompt[] {
   return all<PromptRow>(
-    `SELECT * FROM prompts WHERE workspaceId = ? ${onlyActive ? 'AND active = 1' : ''} ORDER BY createdAt ASC, id ASC`,
+    `SELECT * FROM prompts WHERE workspaceId = ? AND deletedAt IS NULL ${onlyActive ? 'AND active = 1' : ''} ORDER BY createdAt ASC, id ASC`,
     [workspaceId],
   ).map((r) => ({ ...r, active: Boolean(r.active) }))
 }
@@ -421,13 +495,18 @@ export function promptById(workspaceId: number, id: number): Prompt | null {
 }
 
 export function activePromptCount(workspaceId: number): number {
-  return one<{ n: number }>('SELECT COUNT(*) AS n FROM prompts WHERE workspaceId = ? AND active = 1', [workspaceId])?.n ?? 0
+  return one<{ n: number }>('SELECT COUNT(*) AS n FROM prompts WHERE workspaceId = ? AND active = 1 AND deletedAt IS NULL', [workspaceId])?.n ?? 0
 }
 
 export function addPrompt(workspaceId: number, text: string, topic: string, source: 'sugerido' | 'manual'): number | null {
   const clean = text.trim().replace(/\s+/g, ' ')
   if (!clean) return null
-  const dup = one<{ id: number }>('SELECT id FROM prompts WHERE workspaceId = ? AND lower(text) = lower(?)', [workspaceId, clean])
+  const dup = one<{ id: number; deletedAt: string | null }>('SELECT id, deletedAt FROM prompts WHERE workspaceId = ? AND lower(text) = lower(?) ORDER BY deletedAt IS NULL DESC LIMIT 1', [workspaceId, clean])
+  // Si estaba archivado, vuelve con todo su historial (y no se vuelve a pagar lo de esta semana).
+  if (dup?.deletedAt) {
+    run('UPDATE prompts SET deletedAt = NULL, active = 1 WHERE id = ?', [dup.id])
+    return dup.id
+  }
   if (dup) return null
   return run('INSERT INTO prompts (workspaceId, text, topic, source, createdAt) VALUES (?, ?, ?, ?, ?)', [
     workspaceId,
@@ -442,12 +521,26 @@ export function setPromptActive(workspaceId: number, id: number, active: boolean
   run('UPDATE prompts SET active = ? WHERE id = ? AND workspaceId = ?', [active ? 1 : 0, id, workspaceId])
 }
 
+/**
+ * Cambiar el texto de una pregunta es preguntar otra cosa: la antigua se archiva
+ * con sus respuestas y la nueva empieza de cero (se mide en la próxima medición).
+ * Cambiar solo el tema no toca el historial.
+ */
 export function updatePrompt(workspaceId: number, id: number, text: string, topic: string) {
-  run('UPDATE prompts SET text = ?, topic = ? WHERE id = ? AND workspaceId = ?', [text.trim().slice(0, 400), topic.trim().slice(0, 60), id, workspaceId])
+  const current = promptById(workspaceId, id)
+  if (!current) return
+  const clean = text.trim().replace(/\s+/g, ' ').slice(0, 400)
+  if (clean.toLowerCase() === current.text.toLowerCase()) {
+    run('UPDATE prompts SET topic = ? WHERE id = ? AND workspaceId = ?', [topic.trim().slice(0, 60), id, workspaceId])
+    return
+  }
+  deletePrompt(workspaceId, id)
+  addPrompt(workspaceId, clean, topic, 'manual')
 }
 
+/** Borrar = archivar: deja de medirse y desaparece de la lista, pero sus respuestas siguen en el historial. */
 export function deletePrompt(workspaceId: number, id: number) {
-  run('DELETE FROM prompts WHERE id = ? AND workspaceId = ?', [id, workspaceId])
+  run('UPDATE prompts SET deletedAt = ?, active = 0 WHERE id = ? AND workspaceId = ?', [nowIso(), id, workspaceId])
 }
 
 export function suggestionsOf(workspaceId: number, status: Suggestion['status'] = 'nueva'): Suggestion[] {

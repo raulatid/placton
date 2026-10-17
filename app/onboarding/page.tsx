@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { LangSwitch } from '@/components/LangSwitch'
 import { Logo } from '@/components/Logo'
@@ -17,22 +18,9 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   const { t } = await getT()
   const user = await requireUser()
   const spaces = repo.workspacesOf(user.id)
-  // Quien ya tiene un espacio terminado va al panel, salvo que esté creando otro.
-  if (!sp.new && spaces.some((w) => w.onboarded) && !spaces.some((w) => !w.onboarded && w.role === 'owner')) redirect('/dashboard')
-  if (sp.new && !spaces.some((w) => !w.onboarded && w.role === 'owner')) {
-    // En una agencia, «nuevo espacio» es un cliente más de su suscripción.
-    const current = user.currentWorkspaceId ? repo.workspaceById(user.currentWorkspaceId) : null
-    const owner = current ? repo.agencyOwnerOf(current) : null
-    if (owner && repo.accessOf(owner).ok) {
-      const client = repo.createClientWorkspace(user.id, owner, 'New client')
-      if (!client) redirect(`/dashboard/settings/billing?error=${encodeURIComponent(t('You have used all the clients in your plan. Add more here.', 'Has usado todos los clientes de tu plan. Añade más aquí.'))}`)
-    } else if (repo.canCreateWorkspace(user.id) || !spaces.some((w) => w.onboarded)) {
-      repo.createWorkspace(user.id, 'My workspace')
-    } else {
-      redirect(`/dashboard/settings/billing?error=${encodeURIComponent('La prueba gratis incluye un solo espacio. Elige un plan para crear más.')}`)
-    }
-    redirect('/onboarding')
-  }
+  // Quien ya tiene un espacio terminado va al panel, salvo que tenga uno nuevo a medias
+  // (se crean desde «Nuevo espacio» o «Nuevo cliente», con un formulario, nunca con un enlace).
+  if (spaces.some((w) => w.onboarded) && !spaces.some((w) => !w.onboarded && w.role === 'owner')) redirect('/dashboard')
   const draft = repo.workspacesOf(user.id).find((w) => !w.onboarded && w.role === 'owner')
   const limit = draft ? repo.promptLimit(draft) : repo.promptLimit({ ...spaces[0], plan: 'trial', billingOwnerId: null } as never)
 
@@ -41,6 +29,11 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       <header className="flex items-center justify-between px-5 py-4 sm:px-8">
         <Logo href="/dashboard" />
         <div className="flex items-center gap-3">
+          {spaces.some((w) => w.onboarded) && (
+            <Link href="/dashboard" className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-mute hover:bg-white hover:text-ink">
+              {t('Back to the dashboard', 'Volver al panel')}
+            </Link>
+          )}
           <LangSwitch />
           <form action={logoutAction}>
             <button className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-mute hover:bg-white hover:text-ink">{t('Log out', 'Salir')}</button>

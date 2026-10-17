@@ -145,6 +145,12 @@ function PrivacyEn() {
             your language. These do not need your consent.
           </p>
           <p>
+            We also count visits to the website with our own analytics, without cookies: each visit is grouped with a daily fingerprint
+            (IP address, browser and date, encrypted with a secret) that does not identify you and cannot follow you from one day to the
+            next. We store the page, the site you came from, your browser language and the type of device. The legal basis is our
+            legitimate interest in knowing how the website is used, and the data is kept for 12 months.
+          </p>
+          <p>
             Only if you accept, we also use Google Analytics cookies (_ga and _ga_*, up to two years) to measure, in aggregate, how the
             website is used. Google Analytics is provided by Google Ireland Limited, which acts as our processor; data may be transferred
             to the United States under the EU-US Data Privacy Framework. If you reject them, nothing from Google is loaded. We do not use
@@ -297,6 +303,12 @@ function PrivacyEs() {
           <p>
             Usamos cookies técnicas necesarias para que el servicio funcione, como la que mantiene tu sesión iniciada y la que recuerda tu idioma. Estas no
             necesitan tu consentimiento.
+          </p>
+          <p>
+            También contamos las visitas a la web con una analítica propia, sin cookies: cada visita se agrupa con una huella diaria (dirección
+            IP, navegador y fecha, cifrada con un secreto) que no te identifica ni permite seguirte de un día a otro. Guardamos la página, la
+            web de la que vienes, el idioma del navegador y el tipo de dispositivo. La base legal es nuestro interés legítimo en saber cómo se
+            usa la web, y los datos se guardan 12 meses.
           </p>
           <p>
             Solo si lo aceptas, usamos además cookies de Google Analytics (_ga y _ga_*, hasta dos años) para medir de forma agregada cómo se usa la web. Google

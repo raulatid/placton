@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ipFrom } from '@/lib/abuse'
 import { nowIso, run, today } from '@/lib/db'
 
 // Analítica propia y sin cookies: una fila por página vista de la web pública.
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       refHost = body.ref ? new URL(body.ref).hostname.replace(/^www\./, '') : ''
     } catch {}
     if (refHost.endsWith('placton.tech')) refHost = ''
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
+    const ip = ipFrom(req.headers)
     const day = today()
     const visitor = createHash('sha256').update(`${process.env.CRON_SECRET ?? 'placton'}:${ip}:${ua}:${day}`).digest('hex').slice(0, 24)
     const device = /iPad|Tablet/i.test(ua) ? 'tablet' : /Mobi|Android|iPhone/i.test(ua) ? 'movil' : 'ordenador'

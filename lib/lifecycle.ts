@@ -33,6 +33,23 @@ export async function runLifecycle() {
   } catch (err) {
     reportError(err, 'lifecycle:gasto')
   }
+  try {
+    retention()
+  } catch (err) {
+    reportError(err, 'lifecycle:retención')
+  }
+}
+
+/** Plazos de la política de privacidad: lo que caduca se borra. */
+function retention() {
+  const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+  run('DELETE FROM page_views WHERE createdAt < ?', [ago(365)])
+  run('DELETE FROM error_log WHERE createdAt < ?', [ago(365)])
+  run('DELETE FROM email_log WHERE createdAt < ?', [ago(365)])
+  run('DELETE FROM contact_messages WHERE createdAt < ?', [ago(730)])
+  run('DELETE FROM signup_log WHERE createdAt < ?', [ago(30)])
+  run('DELETE FROM sessions WHERE expiresAt < ?', [new Date().toISOString()])
+  run('DELETE FROM password_resets WHERE expiresAt < ?', [new Date().toISOString()])
 }
 
 /**

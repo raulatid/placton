@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { recordSignup, signupAllowed } from '@/lib/abuse'
-import { safeNext, startSession } from '@/lib/auth'
+import { ipFrom, recordSignup, signupAllowed } from '@/lib/abuse'
+import { endAllSessions, safeNext, startSession } from '@/lib/auth'
 import { appUrl, cookieDomain } from '@/lib/email'
 import { googleProfile } from '@/lib/google'
 import * as repo from '@/lib/repo'
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   let user = repo.userByGoogleId(profile.sub) ?? repo.userByEmail(profile.email)
   let isNew = false
   if (!user) {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'local'
+    const ip = ipFrom(req.headers)
     if (!signupAllowed(ip)) return NextResponse.redirect(`${appUrl()}/login?error=limit`)
     recordSignup(ip)
     user = repo.createUser({
@@ -36,7 +36,10 @@ export async function GET(req: NextRequest) {
     })
     isNew = true
   } else if (!user.googleId) {
-    repo.updateUser(user.id, { googleId: profile.sub })
+    // El correo nunca se verificó al registrarse con contraseña: si fue otra persona quien
+    // creó la cuenta con este correo, pierde el acceso. Google confirma que el correo es de quien entra.
+    repo.updateUser(user.id, { googleId: profile.sub, passwordHash: null })
+    endAllSessions(user.id)
   }
   await startSession(user.id)
 

@@ -1,24 +1,31 @@
 'use server'
 
-import { trialBlockReason } from '@/lib/abuse'
+import { recordTrial, trialBlockReason } from '@/lib/abuse'
+import { run } from '@/lib/db'
 import { reportError } from '@/lib/monitor'
 import { analyzeBrand, peekSite, suggestPrompts, type BrandProfile, type SuggestedPrompt } from '@/lib/ai'
 import { requireUser } from '@/lib/auth'
 import { availablePlatformIds } from '@/lib/engines'
 import { getT } from '@/lib/i18n'
+import { canonicalCountry, countryFromDomain } from '@/lib/countries'
 import { domainKey } from '@/lib/norm'
 import * as repo from '@/lib/repo'
 import { startRun } from '@/lib/tracking'
 import type { Workspace } from '@/lib/types'
 
+/**
+ * El alta trabaja siempre sobre un borrador propio (sin terminar y del que se es
+ * propietario), nunca sobre un espacio ya en marcha. El primero se crea aquí;
+ * los siguientes nacen desde «Nuevo espacio» o «Nuevo cliente».
+ */
 async function draftWorkspace(): Promise<{ ws: Workspace; userId: number }> {
   const user = await requireUser()
-  let ws = user.currentWorkspaceId ? repo.workspaceById(user.currentWorkspaceId) : null
-  if (ws && !repo.roleIn(ws.id, user.id)) ws = null
+  const spaces = repo.workspacesOf(user.id)
+  const drafts = spaces.filter((w) => !w.onboarded && w.role === 'owner')
+  let ws: Workspace | null = drafts.find((w) => w.id === user.currentWorkspaceId) ?? drafts[0] ?? null
   if (!ws) {
-    // Si ya pertenece a algún espacio terminado y crea otro, empieza uno nuevo.
-    const pending = repo.workspacesOf(user.id).find((w) => !w.onboarded && w.role === 'owner')
-    ws = pending ?? repo.createWorkspace(user.id, 'My workspace')
+    if (spaces.some((w) => w.onboarded)) throw new Error('No hay ningún espacio nuevo a medias: créalo desde el selector de espacios.')
+    ws = repo.createWorkspace(user.id, 'My workspace')
   }
   return { ws, userId: user.id }
 }
@@ -41,7 +48,7 @@ export async function analyzeAction(rawUrl: string): Promise<{ profile: BrandPro
   const fallback: BrandProfile = {
     brandName: nameFromDomain(domain),
     description: site?.description ?? '',
-    country: 'España',
+    country: countryFromDomain(domain, site?.lang || lang),
     language: site?.lang || (lang === 'es' ? 'es' : 'en'),
     competitors: [],
   }
@@ -108,7 +115,8 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
     name: ws.name === 'Mi espacio' || ws.name === 'My workspace' ? brandName : ws.name,
     brandName,
     description: payload.description.trim().slice(0, 600),
-    country: payload.country || 'España',
+    // Siempre un país de la lista: si no, las búsquedas saldrían desde otro país.
+    country: canonicalCountry(payload.country) ?? countryFromDomain(ws.domain, payload.language),
     language: (payload.language || 'es').slice(0, 2),
     engines: availablePlatformIds(),
   })
@@ -126,8 +134,11 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
   const blocked = fresh.plan === 'trial' && !fresh.billingOwnerId ? trialBlockReason(fresh) : null
   if (blocked) {
     repo.updateWorkspace(ws.id, { trialEndsAt: new Date().toISOString() })
+    // Sin prueba no hay correos de «tu prueba termina» ni «ha terminado».
+    run('UPDATE workspaces SET trialReminderAt = ?, trialEndedMailAt = ? WHERE id = ?', [new Date().toISOString(), new Date().toISOString(), ws.id])
     return { ok: true, runId: null, trialUsed: blocked }
   }
+  if (fresh.plan === 'trial' && !fresh.billingOwnerId) recordTrial(fresh)
 
   const { runId } = startRun(ws.id, 'alta')
   return { ok: true, runId }

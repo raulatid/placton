@@ -18,7 +18,8 @@ function fromCitations(workspaceId: number, name: string): string | null {
   if (target.length < 3) return null
   const domains = all<{ domain: string }>('SELECT DISTINCT domain FROM citations WHERE workspaceId = ?', [workspaceId]).map((r) => r.domain)
   const label = (d: string) => compact(d.split('.')[0] ?? '')
-  return domains.find((d) => label(d) === target) ?? domains.find((d) => target.length >= 5 && label(d).startsWith(target)) ?? null
+  // Solo coincidencia exacta del nombre: «apple» no debe quedarse con applebees.com.
+  return domains.find((d) => label(d) === target) ?? null
 }
 
 async function exists(domain: string): Promise<boolean> {
@@ -29,7 +30,8 @@ async function exists(domain: string): Promise<boolean> {
   }
 }
 
-async function fromAI(name: string, context: string, country: string): Promise<string | null> {
+/** Dominio encontrado, null si la IA no lo sabe, o undefined si la consulta falló (entonces no se guarda). */
+async function fromAI(name: string, context: string, country: string): Promise<string | null | undefined> {
   try {
     const res = await responses({
       model: process.env.PLACTON_FAST_MODEL || 'gpt-5.6-luna',
@@ -43,15 +45,18 @@ async function fromAI(name: string, context: string, country: string): Promise<s
     const domain = cleanDomain(JSON.parse(res.text || '{}').domain)
     return domain && (await exists(domain)) ? domain : null
   } catch {
-    return null
+    return undefined
   }
 }
 
 /* ───── Caché por nombre y país: cada marca se busca una sola vez ───── */
 
 function cached(name: string, country: string): string | null | undefined {
-  const r = one<{ domain: string }>('SELECT domain FROM brand_domains WHERE nameKey = ? AND country = ?', [compact(name), country])
-  return r ? r.domain || null : undefined
+  const r = one<{ domain: string; checkedAt: string }>('SELECT domain, checkedAt FROM brand_domains WHERE nameKey = ? AND country = ?', [compact(name), country])
+  if (!r) return undefined
+  // Un «no tiene web» se vuelve a mirar pasados 60 días.
+  if (!r.domain && Date.now() - new Date(r.checkedAt).getTime() > 60 * 86_400_000) return undefined
+  return r.domain || null
 }
 
 function remember(name: string, country: string, domain: string | null) {
@@ -68,7 +73,8 @@ async function drain() {
     while (queue.length) {
       const job = queue.shift()!
       if (cached(job.name, job.country) !== undefined) continue
-      remember(job.name, job.country, await fromAI(job.name, job.context, job.country))
+      const found = await fromAI(job.name, job.context, job.country)
+      if (found !== undefined) remember(job.name, job.country, found)
     }
   } finally {
     working = false
@@ -104,7 +110,13 @@ export async function resolveCompetitorDomain(workspaceId: number, competitorId:
   const country = ws?.country ?? ''
   let domain = cached(c.name, country) ?? fromCitations(workspaceId, c.name)
   if (!domain && cached(c.name, country) === undefined) {
-    domain = await fromAI(c.name, ws ? `competitor of ${ws.brandName} (${ws.domain}). ${ws.description}`.slice(0, 400) : '', country)
+    const found = await fromAI(c.name, ws ? `competitor of ${ws.brandName} (${ws.domain}). ${ws.description}`.slice(0, 400) : '', country)
+    if (found === undefined) {
+      // Falló la consulta (no es que no tenga web): se reintentará en otra pasada.
+      run('UPDATE competitors SET domainCheckedAt = NULL WHERE id = ?', [c.id])
+      return null
+    }
+    domain = found
     remember(c.name, country, domain)
   }
   if (domain) run('UPDATE competitors SET domain = ? WHERE id = ?', [domain, c.id])

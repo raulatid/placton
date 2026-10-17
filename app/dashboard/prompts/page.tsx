@@ -9,6 +9,7 @@ import { platforms } from '@/lib/engines'
 import { pageCtx } from '@/lib/guard'
 import { getT } from '@/lib/i18n'
 import { parseRange, promptStats } from '@/lib/metrics'
+import { ConfirmButton } from '@/components/panel/ConfirmButton'
 import * as repo from '@/lib/repo'
 import { acceptSuggestionAction, deletePromptAction, dismissSuggestionAction, togglePromptAction } from '../actions'
 
@@ -173,9 +174,14 @@ export default async function PromptsPage({ searchParams }: { searchParams: Prom
                           </form>
                           <form action={deletePromptAction}>
                             <input type="hidden" name="id" value={p.id} />
-                            <button className="rounded-md p-1.5 text-faint transition-colors hover:bg-line-2 hover:text-bad" aria-label={t('Delete prompt', 'Borrar pregunta')} title={t('Delete (including its answers)', 'Borrar (también sus respuestas)')}>
+                            <ConfirmButton
+                              message={t('Delete this prompt? It stops being tracked; its past answers stay in your history.', '¿Borrar esta pregunta? Deja de medirse; sus respuestas anteriores se quedan en el historial.')}
+                              className="rounded-md p-1.5 text-faint transition-colors hover:bg-line-2 hover:text-bad"
+                              aria-label={t('Delete prompt', 'Borrar pregunta')}
+                              title={t('Delete prompt', 'Borrar pregunta')}
+                            >
                               <IconTrash size={15} />
-                            </button>
+                            </ConfirmButton>
                           </form>
                         </div>
                       </td>

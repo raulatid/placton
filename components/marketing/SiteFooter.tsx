@@ -6,6 +6,7 @@ import { LangSwitch } from '@/components/LangSwitch'
 import { getT } from '@/lib/i18n'
 import { TRIAL_DAYS } from '@/lib/plans'
 import { shotSrc } from './HeroShot'
+import { CookieSettingsButton } from './Analytics'
 import { BrandLink, Container, pillWhite } from './parts'
 
 // Pie: bloque oscuro con las esquinas de arriba redondeadas. Dentro, una tarjeta
@@ -81,18 +82,22 @@ export async function SiteFooter() {
 
         <div className="flex flex-col gap-4 border-t border-white/10 py-6 text-[13px] text-white/50 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span>© 2026 Placton</span>
+            <span>© 2026 SELSPY AGENCY S. COOP. · Placton</span>
             <a href="mailto:contact@placton.tech" className="transition-colors hover:text-white">
               contact@placton.tech
             </a>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <Link href="/terms#aviso-legal" className="transition-colors hover:text-white">
+              {t('Legal notice', 'Aviso legal')}
+            </Link>
             <Link href="/terms" className="transition-colors hover:text-white">
               {t('Terms', 'Términos')}
             </Link>
             <Link href="/privacy" className="transition-colors hover:text-white">
               {t('Privacy', 'Privacidad')}
             </Link>
+            <CookieSettingsButton className="transition-colors hover:text-white" short />
             <Suspense fallback={null}>
               <LangSwitch tone="dark" />
             </Suspense>

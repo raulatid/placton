@@ -2,6 +2,9 @@
 
 import { storedTopic, type ContactField, type ContactState } from '@/components/marketing/contact'
 import { getT } from '@/lib/i18n'
+import { clientIp, ipHash } from '@/lib/abuse'
+import { one, run } from '@/lib/db'
+import { sendEmail } from '@/lib/email'
 import { saveContact } from '@/lib/repo'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
@@ -33,8 +36,24 @@ export async function sendContact(_prev: ContactState, formData: FormData): Prom
     return { status: 'error', message: t('Please check the highlighted fields.', 'Revisa los campos marcados.'), errors }
   }
 
+  // Freno al envío masivo: 5 mensajes por conexión cada hora.
+  const ip = ipHash(await clientIp())
+  if ((one<{ n: number }>('SELECT COUNT(*) AS n FROM signup_log WHERE ipHash = ? AND createdAt > ?', [`contact:${ip}`, new Date(Date.now() - 3_600_000).toISOString()])?.n ?? 0) >= 5) {
+    return { status: 'error', message: t('Too many messages in a short time. Try again later or write to contact@placton.tech.', 'Demasiados mensajes seguidos. Prueba más tarde o escríbenos a contact@placton.tech.') }
+  }
+  run('INSERT INTO signup_log (ipHash, createdAt) VALUES (?, ?)', [`contact:${ip}`, new Date().toISOString()])
+
   try {
     saveContact({ name, email, topic, message, userId: null })
+    // Aviso al equipo para responder pronto (no hace falta mirar el panel).
+    void sendEmail({
+      to: process.env.PLACTON_SUPPORT_EMAIL || 'contact@placton.tech',
+      subject: `[Placton · contacto] ${topic}: ${name}`,
+      kind: 'contacto',
+      title: `Mensaje de ${name} (${email})`,
+      body: `Motivo: ${topic}\n\n${message}`,
+      lang: 'es',
+    })
   } catch (e) {
     console.error('[contact] could not save the message', e)
     return {

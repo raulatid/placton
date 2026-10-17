@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { libMessage } from '@/components/panel/format'
+import { urlMessage } from '@/components/panel/format'
 import { btnClass, ButtonLink, Card, CardHeader, fmtDate, Notice } from '@/components/ui'
 import { canManage, requireCtx } from '@/lib/auth'
 import { getT, pick } from '@/lib/i18n'
@@ -24,7 +24,9 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
   const payerId = (repo.agencyOwnerOf(ws) ?? ws).id
   if (sp.pago) paid = await confirmCheckout(sp.pago, payerId)
   ws = repo.workspaceById(payerId) ?? ws
-  const manage = canManage(role)
+  // Se gestiona desde el espacio que paga (la agencia, en un cliente): el papel cuenta ahí.
+  const payerRole = ws.id === viewing.id ? role : repo.roleIn(ws.id, (await requireCtx()).user.id)
+  const manage = Boolean(payerRole && canManage(payerRole))
   const access = repo.accessOf(ws)
   const plan = PLANS[ws.plan]
   const agency = ws.plan === 'agencia'
@@ -35,7 +37,7 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
   const agencyPrice = agency ? agencyQuote(ws.seats, ws.promptPool, ws.billingInterval).total : 0
   const mode = stripeMode()
   const name = planName(ws.plan, lang)
-  const invoices = canManage(role) ? await listInvoices(ws) : []
+  const invoices = manage ? await listInvoices(ws) : []
 
   return (
     <div className="space-y-4">
@@ -45,7 +47,7 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
         </Notice>
       )}
       {sp.cambio && <Notice tone="good">{t('Plan changed. Stripe will prorate the difference on your next invoice.', 'Plan cambiado. Stripe prorratea la diferencia en tu próxima factura.')}</Notice>}
-      {sp.error && <Notice tone="bad">{libMessage(sp.error, lang)}</Notice>}
+      {sp.error && <Notice tone="bad">{urlMessage(sp.error, lang)}</Notice>}
       {mode === 'test' && (
         <Notice tone="warn">
           {t(

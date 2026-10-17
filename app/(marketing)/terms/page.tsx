@@ -23,7 +23,7 @@ const linkClass = 'font-semibold text-brand underline underline-offset-2'
 function TermsEn() {
   return (
     <>
-          <h2>1. Who we are</h2>
+          <h2 id="aviso-legal">1. Who we are (legal notice)</h2>
           <p>
             Placton is a service provided by SELSPY AGENCY S. COOP., tax ID (NIF) F75988824, with its registered address at Paseo la Fuente 9, 4.º A, 30007 Murcia (Spain)
             (&ldquo;Placton&rdquo;, &ldquo;we&rdquo; or &ldquo;us&rdquo;). You can write to us at{' '}
@@ -36,12 +36,13 @@ function TermsEn() {
           <h2>2. What Placton is</h2>
           <p>
             Placton is an online tool that every week sends the questions you set up in your workspace to several AI assistants (ChatGPT,
-            Claude, Google AI Overviews and Perplexity, plus any we may add) and analyses their answers: mentions of your brand and your
+            Claude, Google AI Overviews, Perplexity and Grok, plus any we may add) and analyses their answers: mentions of your brand and your
             competitors, position, tone, cited sources, improvement ideas and a technical audit of your website.
           </p>
           <p>
-            By creating an account or using the service you accept these terms. If you sign up on behalf of a company, you confirm that you
-            are authorised to bind it.
+            Placton is a professional service for companies, freelancers and agencies, for use in their business activity. It is not
+            intended for consumers. By creating an account or using the service you accept these terms and confirm that you use it for
+            your business. If you sign up on behalf of a company, you confirm that you are authorised to bind it.
           </p>
 
           <h2>3. Account and workspaces</h2>
@@ -66,7 +67,7 @@ function TermsEn() {
               <Link href="/pricing" className={linkClass}>
                 pricing page
               </Link>{' '}
-              when you subscribe. Prices are in US dollars and exclude VAT: Spanish VAT is added for customers in Spain and for consumers in the EU; EU businesses with a valid VAT number are invoiced under the reverse charge, and customers outside the EU are not charged Spanish VAT.
+              when you subscribe. Prices are in US dollars and exclude VAT. VAT is added according to your country and tax status: for example, Spanish VAT for customers in Spain, the reverse charge for EU businesses with a valid VAT number, and no Spanish VAT for customers outside the EU.
             </li>
             <li>Subscriptions can be monthly or yearly and renew automatically at the end of each period unless you cancel before then.</li>
             <li>Payments are processed by Stripe. Placton never receives or stores your full card details. An invoice is issued automatically for every payment, sent by email and available under Settings, Billing.</li>
@@ -80,7 +81,7 @@ function TermsEn() {
 
           <h2>6. Cancellation and refunds</h2>
           <p>
-            You can cancel at any time from Workspace settings, under Subscription, which takes you to the Stripe portal. Cancellation
+            You can cancel at any time from Workspace settings, under Billing. Cancellation
             takes effect at the end of the period you have already paid for: you keep access until then and the subscription does not
             renew afterwards. There is no minimum term and no penalty.
           </p>
@@ -183,7 +184,7 @@ function TermsEs() {
   return (
     <>
 
-          <h2>1. Quiénes somos</h2>
+          <h2 id="aviso-legal">1. Quiénes somos (aviso legal)</h2>
           <p>
             Placton es un servicio prestado por SELSPY AGENCY S. COOP., con NIF F75988824 y domicilio en Paseo la Fuente n.º 9, 4.º A, 30007 Murcia (en adelante, «Placton» o
             «nosotros»). Puedes escribirnos a{' '}
@@ -196,13 +197,14 @@ function TermsEs() {
           <h2>2. Qué es Placton</h2>
           <p>
             Placton es una herramienta en línea que envía cada semana a distintos asistentes de inteligencia artificial (ChatGPT, Claude,
-            Google AI Overviews y Perplexity, además de los que podamos añadir) las preguntas que configuras en tu espacio de trabajo, y
-            analiza sus respuestas: menciones de tu marca y de tus competidores, posición, tono, fuentes citadas, ideas de mejora y una
+            Google AI Overviews, Perplexity y Grok, además de los que podamos añadir) las preguntas que configuras en tu espacio de trabajo,
+            y analiza sus respuestas: menciones de tu marca y de tus competidores, posición, tono, fuentes citadas, ideas de mejora y una
             auditoría técnica de tu web.
           </p>
           <p>
-            Al crear una cuenta o usar el servicio aceptas estos términos. Si contratas en nombre de una empresa, declaras que tienes
-            capacidad para obligarla.
+            Placton es un servicio profesional para empresas, autónomos y agencias, para usarlo en su actividad. No está dirigido a
+            consumidores. Al crear una cuenta o usar el servicio aceptas estos términos y declaras que lo usas para tu actividad
+            profesional. Si contratas en nombre de una empresa, declaras que tienes capacidad para obligarla.
           </p>
 
           <h2>3. Cuenta y espacios de trabajo</h2>
@@ -227,7 +229,7 @@ function TermsEs() {
               <Link href="/pricing" className={linkClass}>
                 página de precios
               </Link>{' '}
-              en el momento de contratar. Los precios están en dólares (USD) y no incluyen el IVA: se añade el IVA español a los clientes de España y a los particulares de la UE; a las empresas de la UE con NIF-IVA válido se les factura con inversión del sujeto pasivo, y a los clientes de fuera de la UE no se les repercute IVA español.
+              en el momento de contratar. Los precios están en dólares (USD) y no incluyen el IVA. El IVA se aplica según tu país y tu situación fiscal: por ejemplo, IVA español a los clientes de España, inversión del sujeto pasivo a las empresas de la UE con NIF-IVA válido y sin IVA español a los clientes de fuera de la UE.
             </li>
             <li>Las suscripciones pueden ser mensuales o anuales y se renuevan automáticamente al final de cada periodo, salvo que las canceles antes.</li>
             <li>Los pagos se procesan a través de Stripe. Placton no recibe ni guarda los datos completos de tu tarjeta. Cada cobro genera automáticamente su factura, que te enviamos por correo y tienes en Ajustes, Suscripción.</li>

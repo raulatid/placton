@@ -41,6 +41,8 @@ export interface Workspace {
   billingOwnerId: number | null
   /** Plan Agencia: prompts semanales contratados en total (en el espacio que paga). */
   promptPool: number
+  /** Desde cuándo hay un cobro fallido (los días de gracia cuentan desde aquí). */
+  pastDueSince?: string | null
   /** Logo subido por el cliente (si no, el icono de su web). */
   logoUpdatedAt?: string | null
   createdBy: number | null

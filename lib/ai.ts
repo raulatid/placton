@@ -1,6 +1,8 @@
 import 'server-only'
 import { structured } from './engines/openai'
+import { COUNTRIES, canonicalCountry, countryFromDomain } from './countries'
 import { domainKey } from './norm'
+import { publicFetch, readCapped } from './netguard'
 
 // Ayudas con IA para el alta y las sugerencias. Nada de esto mide: solo
 // prepara. La medición vive en engines + extract y no se contamina con esto.
@@ -33,16 +35,17 @@ export function normalizeUrl(raw: string): string | null {
   }
 }
 
+/** Descarga una página pública (nunca la red interna), con un máximo de 1,5 MB. */
 export async function fetchPage(url: string, timeoutMs = 12000): Promise<{ status: number; html: string; finalUrl: string; ms: number; headers: Headers } | null> {
   const started = Date.now()
   try {
-    const res = await fetch(url, {
+    const got = await publicFetch(url, {
       headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,*/*;q=0.8', 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.6' },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(timeoutMs),
+      timeoutMs,
     })
-    const html = (await res.text()).slice(0, 1_500_000)
-    return { status: res.status, html, finalUrl: res.url || url, ms: Date.now() - started, headers: res.headers }
+    if (!got) return null
+    const body = await readCapped(got.res, 1_500_000)
+    return { status: got.res.status, html: (body ?? Buffer.alloc(0)).toString('utf8'), finalUrl: got.url, ms: Date.now() - started, headers: got.res.headers }
   } catch {
     return null
   }
@@ -111,7 +114,7 @@ const PROFILE_SCHEMA = {
   properties: {
     brandName: { type: 'string', description: 'Nombre comercial de la marca, tal y como lo usa ella' },
     description: { type: 'string', description: 'Qué vende y a quién, en una o dos frases sencillas' },
-    country: { type: 'string', description: 'País principal donde vende, en español (p. ej. «España»)' },
+    country: { type: 'string', description: `País principal donde vende, uno de: ${COUNTRIES.map((c) => c.value).join(', ')}` },
     language: { type: 'string', description: 'Código ISO de dos letras del idioma de sus clientes' },
     competitors: {
       type: 'array',
@@ -172,7 +175,7 @@ export async function analyzeBrand(site: SitePeek, hintName: string, uiLang: 'en
   return {
     brandName: (data.brandName || hintName || own).trim().slice(0, 80),
     description: (data.description ?? '').trim().slice(0, 400),
-    country: (data.country || 'España').trim().slice(0, 40),
+    country: canonicalCountry(data.country) ?? countryFromDomain(domainKey(site.url), data.language || site.lang || ''),
     language: (data.language || site.lang || 'es').trim().slice(0, 2).toLowerCase(),
     competitors: (data.competitors ?? [])
       .map((c) => ({ name: cleanName(c.name).slice(0, 80), domain: domainKey(c.domain ?? '') }))

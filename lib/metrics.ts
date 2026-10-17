@@ -319,7 +319,7 @@ export interface AnswerView {
 
 export function answersList(
   ws: Workspace,
-  opts: { rangeId: RangeId; promptId?: number; engine?: string; brandKey?: string; limit?: number; offset?: number; includeErrors?: boolean },
+  opts: { rangeId: RangeId; promptId?: number; engine?: string; brandKey?: string; kind?: 'directas' | 'indirectas'; limit?: number; offset?: number; includeErrors?: boolean },
 ): { total: number; items: AnswerView[] } {
   const range = resolveRange(ws.id, opts.rangeId)
   const where = ['a.workspaceId = ?', 'a.day BETWEEN ? AND ?']
@@ -334,8 +334,20 @@ export function answersList(
     params.push(opts.engine)
   }
   if (opts.brandKey) {
-    where.push('EXISTS (SELECT 1 FROM mentions m WHERE m.answerId = a.id AND m.brandKey = ?)')
-    params.push(opts.brandKey)
+    // Directa: la nombra. Indirecta: la nombra de pasada o cita su web.
+    const named = 'EXISTS (SELECT 1 FROM mentions m WHERE m.answerId = a.id AND m.brandKey = ?)'
+    const direct = 'EXISTS (SELECT 1 FROM mentions m WHERE m.answerId = a.id AND m.brandKey = ? AND m.direct = 1)'
+    const indirect = '(EXISTS (SELECT 1 FROM mentions m WHERE m.answerId = a.id AND m.brandKey = ? AND m.direct = 0) OR EXISTS (SELECT 1 FROM citations c WHERE c.answerId = a.id AND c.brandKey = ?))'
+    if (opts.kind === 'directas') {
+      where.push(direct)
+      params.push(opts.brandKey)
+    } else if (opts.kind === 'indirectas') {
+      where.push(indirect)
+      params.push(opts.brandKey, opts.brandKey)
+    } else {
+      where.push(`(${named} OR EXISTS (SELECT 1 FROM citations c WHERE c.answerId = a.id AND c.brandKey = ?))`)
+      params.push(opts.brandKey, opts.brandKey)
+    }
   }
   const total = one<{ n: number }>(`SELECT COUNT(*) AS n FROM answers a WHERE ${where.join(' AND ')}`, params)?.n ?? 0
   const rows = all<{

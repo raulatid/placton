@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import Script from 'next/script'
 import { useEffect, useState } from 'react'
 import { useT } from '../LangProvider'
@@ -26,6 +27,9 @@ function read(): Choice {
 
 export function Analytics() {
   const t = useT()
+  const path = usePathname()
+  // Sin Google en páginas con un token en la dirección (invitaciones, cambio de contraseña).
+  const tokenPage = /^\/(invite|reset-password)\//.test(path)
   const [choice, setChoice] = useState<Choice>('no')
   const [open, setOpen] = useState(false)
 
@@ -42,10 +46,20 @@ export function Analytics() {
     try {
       localStorage.setItem(KEY, c)
     } catch {}
-    // Retirar el permiso borra las cookies de Analytics que hubiera.
+    // Retirar el permiso: Google deja de medir al momento, se borran sus cookies
+    // (también las del dominio común .placton.tech) y se recarga sin su código.
     if (c === 'no' && choice === 'yes') {
+      try {
+        ;(window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.('consent', 'update', { analytics_storage: 'denied' })
+      } catch {}
+      const host = location.hostname.replace(/^www\./, '')
+      const base = host.split('.').slice(-2).join('.')
       for (const name of document.cookie.split(';').map((x) => x.split('=')[0].trim()))
-        if (name.startsWith('_ga')) document.cookie = `${name}=; Max-Age=0; path=/; domain=.${location.hostname.replace(/^www\./, '')}`
+        if (name.startsWith('_ga')) for (const d of [host, base]) document.cookie = `${name}=; Max-Age=0; path=/; domain=.${d}`
+      setChoice(c)
+      setOpen(false)
+      window.location.reload()
+      return
     }
     setChoice(c)
     setOpen(false)
@@ -53,7 +67,7 @@ export function Analytics() {
 
   return (
     <>
-      {choice === 'yes' && (
+      {choice === 'yes' && !tokenPage && (
         <>
           <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
           <Script id="ga" strategy="afterInteractive">
@@ -70,8 +84,8 @@ export function Analytics() {
           <p className="text-[14px] font-bold text-ink">{t('Can we measure your visit?', '¿Podemos medir tu visita?')}</p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-mute">
             {t(
-              'We use Google Analytics cookies to understand how the site is used. Nothing is loaded unless you accept. ',
-              'Usamos cookies de Google Analytics para saber cómo se usa la web. No se carga nada si no aceptas. ',
+              'We use Google Analytics cookies to understand how the site is used. Nothing from Google is loaded unless you accept. ',
+              'Usamos cookies de Google Analytics para saber cómo se usa la web. No se carga nada de Google si no aceptas. ',
             )}
             <Link href="/privacy#cookies" className="font-semibold text-ink-2 underline decoration-line underline-offset-2 hover:decoration-ink">
               {t('More info', 'Más información')}
@@ -92,11 +106,11 @@ export function Analytics() {
 }
 
 /** Vuelve a abrir el aviso para cambiar la elección (desde la política de privacidad). */
-export function CookieSettingsButton({ className }: { className?: string }) {
+export function CookieSettingsButton({ className, short }: { className?: string; short?: boolean }) {
   const t = useT()
   return (
     <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN))} className={className}>
-      {t('Change cookie preferences', 'Cambiar preferencias de cookies')}
+      {short ? t('Cookies', 'Cookies') : t('Change cookie preferences', 'Cambiar preferencias de cookies')}
     </button>
   )
 }

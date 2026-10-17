@@ -30,15 +30,11 @@ export default async function MentionsPage({ searchParams }: { searchParams: Pro
   const stats = brands.find((b) => b.key === brand.key)!
   const page = Math.max(1, Number(sp.p) || 1)
   const plats = platforms().filter((p) => p.available)
-  const list = answersList(ws, { rangeId, brandKey: brand.key, engine: sp.plataforma || undefined, limit: 200 })
-  const filtered = list.items.filter((a) => {
-    const m = a.mentions.find((x) => x.brandKey === brand.key)
-    if (sp.tipo === 'directas') return m?.direct
-    if (sp.tipo === 'indirectas') return (m && !m.direct) || a.citations.some((c) => c.brandKey === brand.key)
-    return true
-  })
-  const shown = filtered.slice((page - 1) * PAGE, page * PAGE)
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE))
+  // Filtro y páginas en la base de datos: se llega a todas las respuestas del periodo.
+  const kind = sp.tipo === 'directas' || sp.tipo === 'indirectas' ? sp.tipo : undefined
+  const list = answersList(ws, { rangeId, brandKey: brand.key, engine: sp.plataforma || undefined, kind, limit: PAGE, offset: (page - 1) * PAGE })
+  const shown = list.items
+  const pages = Math.max(1, Math.ceil(list.total / PAGE))
   const cited = sources(ws, rangeId, brand.key)
   const q = (extra: Record<string, string | undefined>) => {
     const p = new URLSearchParams({ r: rangeId, marca: brand.key })

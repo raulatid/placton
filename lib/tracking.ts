@@ -3,6 +3,7 @@ import { addDays, all, nowIso, one, run, today } from './db'
 import { ask, enginesFor, getGoogleTask, platformById, postGoogleTasks, type AskResult, type Platform } from './engines'
 import { extract } from './extract'
 import { refreshInsights } from './insights'
+import { reportError } from './monitor'
 import * as repo from './repo'
 import type { Prompt, Run, Workspace } from './types'
 
@@ -26,7 +27,7 @@ export function activeRun(workspaceId: number): Run | null {
     run("UPDATE runs SET status = 'error', error = 'Interrumpida', finishedAt = ? WHERE id = ?", [nowIso(), r.id])
     return null
   }
-  if (Date.now() - new Date(r.startedAt).getTime() > STALE_MS) {
+  if (Date.now() - new Date(r.startedAt).getTime() > STALE_MS && Date.now() - new Date(beat).getTime() > ORPHAN_MS) {
     run("UPDATE runs SET status = 'error', error = 'Caducada', finishedAt = ? WHERE id = ?", [nowIso(), r.id])
     return null
   }
@@ -142,7 +143,8 @@ function sharedAnswer(key: string, engine: string, wsId: number, day: string): (
   if (process.env.PLACTON_SHARE_ANSWERS === '0') return null
   const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
   const a = one<{ id: number; reusedFrom: number | null; text: string; model: string; empty: number; searchQueries: string }>(
-    'SELECT id, reusedFrom, text, model, empty, searchQueries FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1',
+    // Solo respuestas originales (pagadas esa semana): reutilizar una copia la iría arrastrando semana tras semana.
+    "SELECT id, reusedFrom, text, model, empty, searchQueries FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND reusedFrom IS NULL AND (empty = 0 OR engine = 'google') AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1",
     [key, engine, since, day, wsId],
   )
   if (!a) return null
@@ -160,6 +162,7 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
   let costUsd = 0
   const ctx = { country: ws.country, language: ws.language }
   const beat = () => run('UPDATE runs SET heartbeatAt = ? WHERE id = ?', [nowIso(), runId])
+  const pulse = setInterval(beat, 60_000)
 
   // 1) Lo que otro espacio ya preguntó esta semana no se vuelve a pagar.
   const keyOf = (c: Cell) => promptKey(c.prompt.text, ws.country, ws.language)
@@ -208,7 +211,11 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
                 return ask(platform, prompt.text, ctx)
               })
             : await ask(platform, prompt.text, ctx)
+        // Solo Google puede no dar respuesta (sin AI Overview); en las demás, vacío es un fallo y se reintenta.
+        if (res.empty && platform.id !== 'google') throw new Error(`${platform.name} devolvió una respuesta vacía`)
         const analysis = res.empty ? { mentions: [], citations: [], costUsd: 0 } : await extract(prompt.text, res.text, res.citations, brands)
+        // El prompt se pudo borrar mientras se medía: entonces no hay nada que guardar.
+        if (!one('SELECT id FROM prompts WHERE id = ? AND deletedAt IS NULL', [prompt.id])) continue
         const cellCost = res.costUsd + analysis.costUsd
         costUsd += cellCost
 
@@ -255,11 +262,15 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
         }
       } catch (err) {
         const message = ((err as Error).message ?? 'Error desconocido').slice(0, 500)
-        run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ? AND error IS NOT NULL', [ws.id, day, prompt.id, platform.id])
-        run(
-          `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, latencyMs, error, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [runId, ws.id, prompt.id, platform.id, platform.model, day, Date.now() - started, message, nowIso()],
-        )
+        try {
+          run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ? AND error IS NOT NULL', [ws.id, day, prompt.id, platform.id])
+          run(
+            `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, latencyMs, error, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [runId, ws.id, prompt.id, platform.id, platform.model, day, Date.now() - started, message, nowIso()],
+          )
+        } catch {
+          // El prompt ya no existe (borrado a mitad): nada que apuntar, y la medición sigue con el resto.
+        }
       } finally {
         done++
         run('UPDATE runs SET done = ?, costUsd = ?, heartbeatAt = ? WHERE id = ?', [done, costUsd, nowIso(), runId])
@@ -269,6 +280,15 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
 
   try {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, cells.length) }, worker))
+    // Si falla más de la mitad (sin saldo en un proveedor, caída…), la medición no
+    // cuenta como hecha: el programador vuelve a intentar las celdas que faltan.
+    const failed = one<{ n: number }>('SELECT COUNT(*) AS n FROM answers WHERE runId = ? AND error IS NOT NULL', [runId])?.n ?? 0
+    if (failed > cells.length / 2) {
+      const why = one<{ error: string }>('SELECT error FROM answers WHERE runId = ? AND error IS NOT NULL ORDER BY id DESC LIMIT 1', [runId])?.error ?? ''
+      run("UPDATE runs SET status = 'error', error = ?, finishedAt = ?, costUsd = ? WHERE id = ?", [`Fallaron ${failed} de ${cells.length}: ${why}`.slice(0, 500), nowIso(), costUsd, runId])
+      reportError(new Error(`Medición con ${failed} de ${cells.length} respuestas fallidas: ${why}`.slice(0, 300)), `medición ${ws.name}`)
+      return
+    }
     run("UPDATE runs SET status = 'ok', error = NULL, finishedAt = ?, costUsd = ? WHERE id = ?", [nowIso(), costUsd, runId])
     // Solo las mediciones completas (alta y semanal) marcan el ciclo; «Medir ahora»
     // mide prompts nuevos y no debe retrasar la medición de la semana.
@@ -285,6 +305,9 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
       costUsd,
       runId,
     ])
+    reportError(err, `medición ${ws.name}`)
+  } finally {
+    clearInterval(pulse)
   }
 }
 

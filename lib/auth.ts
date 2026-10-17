@@ -66,11 +66,16 @@ export async function endSession() {
   const token = store.get(SESSION_COOKIE)?.value
   if (token) run('DELETE FROM sessions WHERE id = ?', [hashToken(token)])
   store.set(SESSION_COOKIE, '', { path: '/', maxAge: 0, domain: cookieDomain() })
-  store.delete(SESSION_COOKIE)
 }
 
 export function endAllSessions(userId: number) {
   run('DELETE FROM sessions WHERE userId = ?', [userId])
+}
+
+/** Cierra las demás sesiones de la persona y conserva la de este navegador. */
+export async function endOtherSessions(userId: number) {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value
+  run('DELETE FROM sessions WHERE userId = ? AND id <> ?', [userId, token ? hashToken(token) : ''])
 }
 
 export const currentUser = cache(async (): Promise<User | null> => {
@@ -124,12 +129,23 @@ export const requireCtx = cache(async (opts?: { allowUnonboarded?: boolean }): P
     }
   }
   if (!ws || !role) redirect('/onboarding')
-  if (!ws.onboarded && !opts?.allowUnonboarded) redirect('/onboarding')
+  if (!ws.onboarded && !opts?.allowUnonboarded) {
+    // Un espacio a medias no bloquea el panel si la persona ya tiene otro terminado.
+    const done = repo.workspacesOf(user.id).find((w) => w.onboarded)
+    if (!done) redirect('/onboarding')
+    repo.updateUser(user.id, { currentWorkspaceId: done.id })
+    return { user, workspace: done, role: done.role }
+  }
   return { user, workspace: ws, role }
 })
 
 export function canManage(role: Role): boolean {
   return role === 'owner' || role === 'admin'
+}
+
+/** ¿Es administrador? Su correo está en la lista y lo ha verificado entrando con Google. */
+export function isAdmin(user: { email: string; googleId?: string | null }): boolean {
+  return Boolean(user.googleId) && isAdminEmail(user.email)
 }
 
 export function isAdminEmail(email: string): boolean {

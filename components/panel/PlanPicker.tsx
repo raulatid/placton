@@ -38,7 +38,7 @@ export function PlanPicker({
     <section aria-label={t('Plans', 'Planes')}>
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <p className="max-w-md text-[14px] leading-relaxed text-mute">
-          {t('Review the plans here. Upgrades, downgrades, cancellations and billing details are managed in Stripe ', 'Revisa aquí los planes. Las mejoras, bajadas, cancelaciones y datos de facturación se gestionan en Stripe ')}
+          {t('Change plan right here: upgrades are charged at once, prorated. Your card, invoices and billing details are managed in Stripe ', 'Cambia de plan aquí mismo: las subidas se cobran al momento, prorrateadas. La tarjeta, las facturas y los datos de facturación se gestionan en Stripe ')}
           {portalAction ? (
             <form action={portalAction} className="inline">
               <button className={linkClass}>{t('here', 'aquí')}</button>

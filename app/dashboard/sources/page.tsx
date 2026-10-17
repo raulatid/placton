@@ -24,7 +24,14 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
   const tracked = repo.trackedBrands(ws)
   const nameOf = new Map(tracked.map((b) => [b.key, b]))
   const plats = platforms().filter((p) => p.available)
-  const domains = sp.plataforma ? data.domains.filter((d) => d.engines[sp.plataforma!]) : data.domains
+  // Con una plataforma elegida, cada dominio cuenta solo sus citas en esa plataforma (totales, barras y cifras).
+  const domains = sp.plataforma
+    ? data.domains
+        .filter((d) => d.engines[sp.plataforma!])
+        .map((d) => ({ ...d, count: d.engines[sp.plataforma!] }))
+        .sort((a, b) => b.count - a.count)
+    : data.domains
+  const totalCitations = sp.plataforma ? domains.reduce((n, d) => n + d.count, 0) : data.totalCitations
   const max = Math.max(1, ...domains.map((d) => d.count))
   const own = domains.filter((d) => d.brandKey === tracked[0].key).reduce((s, d) => s + d.count, 0)
   const rivals = domains.filter((d) => d.brandKey && d.brandKey !== tracked[0].key).reduce((s, d) => s + d.count, 0)
@@ -64,7 +71,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
         ))}
       </div>
       <Card i={4} className="overflow-hidden">
-        <CardHeader title={t('Most cited domains', 'Dominios más citados')} hint={t(`${data.totalCitations} citations in the period`, `${data.totalCitations} citas en el periodo`)} />
+        <CardHeader title={t('Most cited domains', 'Dominios más citados')} hint={t(`${totalCitations} citations in the period`, `${totalCitations} citas en el periodo`)} />
         {domains.length ? (
           <ul className="divide-y divide-line-2 border-t border-line-2">
             {domains.slice(0, 60).map((d, k) => {

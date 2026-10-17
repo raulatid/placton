@@ -25,7 +25,8 @@ export default async function AccountPage() {
         <Card i={1}>
           <CardHeader title={t('Profile', 'Perfil')} />
           <div className="px-6 pb-6">
-            <ProfileForm user={user} />
+            {/* Solo lo que el formulario necesita: nunca el hash de la contraseña ni el id de Google. */}
+            <ProfileForm user={{ firstName: user.firstName, lastName: user.lastName, email: user.email, passwordHash: user.passwordHash ? 'si' : null, googleId: user.googleId ? 'si' : null }} />
           </div>
         </Card>
         <Card i={2}>

@@ -208,6 +208,7 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
           setWarning(res.error)
         }
       })
+      .catch(() => setWarning(t('We could not write prompts right now. Add your own or try again.', 'No hemos podido escribir los prompts ahora mismo. Añade los tuyos o vuelve a intentarlo.')))
       .finally(() => setLoadingPrompts(false))
   }
 
@@ -217,15 +218,22 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
     setSaving(true)
     setError(null)
     const p = profile ?? { brandName: url, description: '', country: 'España', language: 'en', competitors: [] }
-    const res = await finishAction({
-      brandName: p.brandName,
-      description: p.description,
-      country: p.country,
-      language: p.language,
-      competitors,
-      prompts: prompts.map((x) => ({ text: x.text, topic: x.topic })),
-      leftovers,
-    })
+    let res: Awaited<ReturnType<typeof finishAction>>
+    try {
+      res = await finishAction({
+        brandName: p.brandName,
+        description: p.description,
+        country: p.country,
+        language: p.language,
+        competitors,
+        prompts: prompts.map((x) => ({ text: x.text, topic: x.topic })),
+        leftovers,
+      })
+    } catch {
+      // Un corte o una actualización recién publicada: el botón no se queda cargando.
+      setSaving(false)
+      return setError(t('We could not save it. Check your connection and try again.', 'No hemos podido guardarlo. Revisa la conexión y vuelve a intentarlo.'))
+    }
     setSaving(false)
     if ('error' in res) return setError(res.error)
     if (res.trialUsed) {

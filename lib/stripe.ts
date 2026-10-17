@@ -1,7 +1,8 @@
 import 'server-only'
 import Stripe from 'stripe'
 import { nowIso, one, run } from './db'
-import { AGENCY_CLIENT_MONTHLY, AGENCY_PROMPT_TIERS, CURRENCY, PLANS, YEARLY_DISCOUNT, clampClients, clampPrompts, isPaidPlan, priceFor, type Interval, type PaidPlanId } from './plans'
+import { AGENCY_CLIENT_MONTHLY, AGENCY_PROMPT_TIERS, CURRENCY, PLANS, YEARLY_DISCOUNT, agencyQuote, clampClients, clampPrompts, isPaidPlan, monthlyEquivalent, priceFor, type Interval, type PaidPlanId } from './plans'
+import { reportError } from './monitor'
 import * as repo from './repo'
 import type { SubStatus, User, Workspace } from './types'
 
@@ -181,9 +182,47 @@ export async function listInvoices(ws: Workspace): Promise<{ id: string; number:
 
 export type CheckoutResult = { url: string } | { changed: true } | { error: string }
 
+/** Cuota mensual equivalente de un plan, para saber si un cambio es subida o bajada. */
+function monthlyFor(plan: PaidPlanId, interval: Interval, clients: number, prompts: number): number {
+  if (plan === 'agencia') return agencyQuote(clients, prompts, interval).perMonth
+  return monthlyEquivalent(plan, interval)
+}
+
+const LIVE_STATUSES: Stripe.Subscription.Status[] = ['active', 'past_due', 'trialing', 'unpaid']
+
+/**
+ * La suscripción viva del espacio, aunque la base de datos aún no la conozca
+ * (webhook retrasado, dos pestañas, botón atrás): así nunca se abre un segundo
+ * Checkout que acabaría en dos suscripciones cobrando a la vez.
+ */
+async function liveSubscription(ws: Workspace): Promise<Stripe.Subscription | null> {
+  const s = stripe()
+  if (ws.stripeSubscriptionId) {
+    const sub = await s.subscriptions.retrieve(ws.stripeSubscriptionId).catch(() => null)
+    if (sub && LIVE_STATUSES.includes(sub.status)) return sub
+  }
+  if (ws.stripeCustomerId) {
+    const list = await s.subscriptions.list({ customer: ws.stripeCustomerId, status: 'all', limit: 20 })
+    const sub = list.data.find((x) => LIVE_STATUSES.includes(x.status) && (!x.metadata?.workspaceId || Number(x.metadata.workspaceId) === ws.id))
+    if (sub) return sub
+  }
+  return null
+}
+
+/** Mensaje claro cuando Stripe no puede cobrar un cambio (tarjeta rechazada, etc.). */
+function chargeError(err: unknown): { error: string } {
+  console.error('[placton] cambio de plan', err)
+  const e = err as { type?: string; code?: string }
+  if (e?.type === 'StripeCardError' || e?.code === 'card_declined' || e?.code === 'payment_intent_payment_attempt_failed')
+    return { error: 'No se ha podido cobrar la diferencia. Revisa tu tarjeta en «Facturas y método de pago» y vuelve a intentarlo.' }
+  return { error: 'No se ha podido cambiar el plan ahora mismo. Inténtalo de nuevo en unos minutos o escríbenos.' }
+}
+
 /**
  * Contratar o cambiar de plan. Sin suscripción viva abre el Checkout de Stripe;
- * con suscripción viva cambia el precio con prorrateo, sin pasar otra vez por caja.
+ * con suscripción viva cambia el precio sin pasar otra vez por caja. Las subidas
+ * se cobran al momento (prorrateadas) y solo se aplican si el cobro sale bien;
+ * las bajadas dejan el saldo a favor en la próxima factura.
  */
 export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, interval: Interval, origin: string, clients = 1, prompts = 0): Promise<CheckoutResult> {
   if (!stripeReady()) return { error: 'Los pagos no están configurados todavía.' }
@@ -193,30 +232,40 @@ export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, inte
   const quantity = agency ? clampClients(clients) : 1
   const promptQty = agency ? clampPrompts(prompts) : 0
   const promptPrice = agency ? await ensureAgencyPromptPrice(interval) : null
-  if (agency && quantity < repo.agencyClients(ws.id).length) {
+  const clientCount = repo.agencyClients(ws.id).length
+  if (agency && quantity < clientCount) {
     return { error: 'Tienes más clientes creados que los que eliges. Borra alguno o elige más.' }
   }
   if (agency && promptQty < repo.agencyPromptsUsed(ws.id)) {
     return { error: 'Tus clientes ya tienen más prompts activos que esa bolsa. Pausa algunos o elige más.' }
   }
+  // Una agencia con clientes no puede pasarse a un plan normal: se quedarían sin plan.
+  if (!agency && ws.plan === 'agencia' && clientCount > 1) {
+    return { error: 'Tienes marcas cliente en tu plan Agencia. Bórralas antes de cambiar a otro plan.' }
+  }
 
-  if (ws.stripeSubscriptionId && (ws.status === 'active' || ws.status === 'past_due')) {
-    const sub = await s.subscriptions.retrieve(ws.stripeSubscriptionId)
-    if (sub.status !== 'canceled' && sub.status !== 'incomplete_expired') {
-      const main = sub.items.data.find((i) => !isPromptItem(i)) ?? sub.items.data[0]
-      const promptItem = sub.items.data.find(isPromptItem)
-      const items: Stripe.SubscriptionUpdateParams.Item[] = [{ id: main.id, price, quantity }]
-      if (agency && promptPrice) items.push(promptItem ? { id: promptItem.id, price: promptPrice, quantity: promptQty } : { price: promptPrice, quantity: promptQty })
-      else if (promptItem) items.push({ id: promptItem.id, deleted: true })
+  const sub = await liveSubscription(ws)
+  if (sub) {
+    const main = sub.items.data.find((i) => !isPromptItem(i)) ?? sub.items.data[0]
+    const promptItem = sub.items.data.find(isPromptItem)
+    const items: Stripe.SubscriptionUpdateParams.Item[] = [{ id: main.id, price, quantity }]
+    if (agency && promptPrice) items.push(promptItem ? { id: promptItem.id, price: promptPrice, quantity: promptQty } : { price: promptPrice, quantity: promptQty })
+    else if (promptItem) items.push({ id: promptItem.id, deleted: true })
+    const before = isPaidPlan(ws.plan) ? monthlyFor(ws.plan, ws.billingInterval, ws.seats, ws.promptPool) : 0
+    const upgrade = monthlyFor(plan, interval, quantity, promptQty) > before + 0.005 || (interval === 'year' && ws.billingInterval === 'month')
+    try {
       const updated = await s.subscriptions.update(sub.id, {
         items,
-        proration_behavior: 'create_prorations',
+        proration_behavior: upgrade ? 'always_invoice' : 'create_prorations',
+        ...(upgrade ? { payment_behavior: 'error_if_incomplete' as const } : {}),
         cancel_at_period_end: false,
         automatic_tax: { enabled: autoTax() },
         metadata: { workspaceId: String(ws.id), plan, interval },
       })
       syncSubscription(updated)
       return { changed: true }
+    } catch (err) {
+      return chargeError(err)
     }
   }
 
@@ -231,6 +280,8 @@ export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, inte
     tax_id_collection: { enabled: true },
     customer_update: { name: 'auto', address: 'auto' },
     automatic_tax: { enabled: autoTax() },
+    // Una sesión olvidada en otra pestaña caduca pronto.
+    expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
     locale: 'auto',
     subscription_data: { metadata: { workspaceId: String(ws.id), plan, interval } },
     metadata: { workspaceId: String(ws.id), plan, interval, clients: String(quantity), prompts: String(promptQty) },
@@ -241,7 +292,7 @@ export async function checkout(ws: Workspace, user: User, plan: PaidPlanId, inte
   return { url: session.url }
 }
 
-/** Agencia: cambia clientes y bolsa de prompts (prorrateado en la próxima factura). */
+/** Agencia: cambia clientes y bolsa de prompts (las subidas se cobran al momento). */
 export async function setAgency(ws: Workspace, clients: number, prompts: number): Promise<{ ok: true } | { error: string }> {
   if (ws.plan !== 'agencia' || !ws.stripeSubscriptionId) return { error: 'Este espacio no tiene un plan Agencia activo.' }
   const quantity = clampClients(clients)
@@ -249,17 +300,24 @@ export async function setAgency(ws: Workspace, clients: number, prompts: number)
   if (quantity < repo.agencyClients(ws.id).length) return { error: 'Tienes más clientes creados que ese número. Borra alguno antes.' }
   if (promptQty < repo.agencyPromptsUsed(ws.id)) return { error: 'Tus clientes tienen más prompts activos que esa bolsa. Pausa algunos antes.' }
   const s = stripe()
-  const sub = await s.subscriptions.retrieve(ws.stripeSubscriptionId)
+  const sub = await liveSubscription(ws)
+  if (!sub) return { error: 'Tu suscripción Agencia no está activa. Elige el plan de nuevo para reactivarla.' }
   const main = sub.items.data.find((i) => !isPromptItem(i)) ?? sub.items.data[0]
   const promptItem = sub.items.data.find(isPromptItem)
   const promptPrice = await ensureAgencyPromptPrice(ws.billingInterval)
-  const updated = await s.subscriptions.update(sub.id, {
-    items: [{ id: main.id, quantity }, promptItem ? { id: promptItem.id, quantity: promptQty } : { price: promptPrice, quantity: promptQty }],
-    proration_behavior: 'create_prorations',
-    automatic_tax: { enabled: autoTax() },
-  })
-  syncSubscription(updated)
-  return { ok: true }
+  const upgrade = monthlyFor('agencia', ws.billingInterval, quantity, promptQty) > monthlyFor('agencia', ws.billingInterval, ws.seats, ws.promptPool) + 0.005
+  try {
+    const updated = await s.subscriptions.update(sub.id, {
+      items: [{ id: main.id, quantity }, promptItem ? { id: promptItem.id, quantity: promptQty } : { price: promptPrice, quantity: promptQty }],
+      proration_behavior: upgrade ? 'always_invoice' : 'create_prorations',
+      ...(upgrade ? { payment_behavior: 'error_if_incomplete' as const } : {}),
+      automatic_tax: { enabled: autoTax() },
+    })
+    syncSubscription(updated)
+    return { ok: true }
+  } catch (err) {
+    return chargeError(err)
+  }
 }
 
 /** Portal de cliente de Stripe: tarjeta, facturas y baja. */
@@ -283,17 +341,27 @@ export async function portal(ws: Workspace, origin: string): Promise<{ url: stri
 
 export async function cancelAtPeriodEnd(ws: Workspace, cancel: boolean): Promise<{ ok: true } | { error: string }> {
   if (!ws.stripeSubscriptionId) return { error: 'No hay suscripción que cancelar.' }
-  const sub = await stripe().subscriptions.update(ws.stripeSubscriptionId, { cancel_at_period_end: cancel })
-  syncSubscription(sub)
-  return { ok: true }
+  try {
+    const sub = await stripe().subscriptions.update(ws.stripeSubscriptionId, { cancel_at_period_end: cancel })
+    syncSubscription(sub)
+    return { ok: true }
+  } catch (err) {
+    console.error('[placton] cancelar al final del periodo', err)
+    return { error: 'No se ha podido cambiar la renovación ahora mismo. Inténtalo de nuevo o escríbenos.' }
+  }
 }
 
-export async function cancelImmediately(subscriptionId: string) {
-  if (!stripeReady()) return
+/** Cancela ya una suscripción. true si quedó cancelada (o ya lo estaba); false si Stripe falló. */
+export async function cancelImmediately(subscriptionId: string): Promise<boolean> {
+  if (!stripeReady()) return true
   try {
+    const sub = await stripe().subscriptions.retrieve(subscriptionId)
+    if (sub.status === 'canceled' || sub.status === 'incomplete_expired') return true
     await stripe().subscriptions.cancel(subscriptionId)
+    return true
   } catch (err) {
-    console.error('[placton] cancelar suscripción', subscriptionId, err)
+    reportError(err, `cancelar suscripción ${subscriptionId}`)
+    return false
   }
 }
 
@@ -303,8 +371,9 @@ function mapStatus(s: Stripe.Subscription.Status): SubStatus | null {
     case 'trialing':
       return 'active'
     case 'past_due':
-    case 'unpaid':
       return 'past_due'
+    // Stripe dejó de reintentar: sin acceso hasta que se pague.
+    case 'unpaid':
     case 'canceled':
     case 'incomplete_expired':
       return 'canceled'
@@ -332,10 +401,17 @@ export function syncSubscription(sub: Stripe.Subscription): Workspace | null {
     .find(([k, v]) => k.startsWith('STRIPE_PRICE_') && v && v === item?.price?.id)?.[0]
     .split('_')[2]
     ?.toLowerCase()
-  const plan = (sub.metadata?.plan && isPaidPlan(sub.metadata.plan) ? sub.metadata.plan : (fromLookup?.[1] ?? fromEnv)) ?? ws.plan
+  // Manda el precio que se cobra de verdad; los metadatos solo si el precio no lo dice.
+  const fromPrice = [fromEnv, fromLookup?.[1], item?.price?.metadata?.plan].find((x): x is string => Boolean(x && isPaidPlan(x)))
+  const plan = fromPrice ?? (sub.metadata?.plan && isPaidPlan(sub.metadata.plan) ? sub.metadata.plan : ws.plan)
   const interval = (item?.price?.recurring?.interval === 'year' ? 'year' : 'month') as Interval
   const status = mapStatus(sub.status)
   if (!status) return ws
+
+  // Dos suscripciones vivas para el mismo espacio: se avisa para devolver la sobrante.
+  if (ws.stripeSubscriptionId && ws.stripeSubscriptionId !== sub.id && status === 'active' && (ws.status === 'active' || ws.status === 'past_due')) {
+    reportError(new Error(`Dos suscripciones vivas en el espacio ${ws.id}: ${ws.stripeSubscriptionId} y ${sub.id}`), 'stripe')
+  }
 
   repo.updateWorkspace(ws.id, {
     plan: isPaidPlan(plan) ? plan : ws.plan,
@@ -347,6 +423,7 @@ export function syncSubscription(sub: Stripe.Subscription): Workspace | null {
     cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
     seats: plan === 'agencia' ? Math.max(1, item?.quantity ?? 1) : 1,
     promptPool: plan === 'agencia' ? Math.max(0, promptItem?.quantity ?? 0) : 0,
+    pastDueSince: status === 'past_due' ? (ws.status === 'past_due' && ws.pastDueSince ? ws.pastDueSince : new Date().toISOString()) : null,
   })
   return repo.workspaceById(ws.id)
 }
@@ -357,6 +434,8 @@ export async function confirmCheckout(sessionId: string, workspaceId: number): P
   try {
     const session = await stripe().checkout.sessions.retrieve(sessionId, { expand: ['subscription'] })
     if (String(session.client_reference_id) !== String(workspaceId)) return false
+    // Pagos que tardan días (transferencias): el acceso llega con la factura pagada (webhook).
+    if (session.payment_status === 'unpaid') return false
     const sub = session.subscription
     if (sub && typeof sub !== 'string') {
       syncSubscription(sub)
@@ -387,7 +466,7 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object
-      if (session.subscription) {
+      if (session.subscription && session.payment_status !== 'unpaid') {
         const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id
         const sub = await stripe().subscriptions.retrieve(subId)
         workspaceId = syncSubscription(sub)?.id ?? null
@@ -398,7 +477,9 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.deleted': {
-      workspaceId = syncSubscription(event.data.object)?.id ?? null
+      // Se lee el estado actual: Stripe puede entregar los eventos desordenados o con días de retraso.
+      const fresh = await stripe().subscriptions.retrieve(event.data.object.id).catch(() => event.data.object)
+      workspaceId = syncSubscription(fresh)?.id ?? null
       break
     }
     case 'invoice.paid':
@@ -409,8 +490,14 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
       workspaceId = ws?.id ?? null
       amount = event.type === 'invoice.paid' ? inv.amount_paid : 0
       currency = inv.currency
-      if (ws && event.type === 'invoice.payment_failed') repo.updateWorkspace(ws.id, { status: 'past_due' })
-      if (event.type === 'invoice.paid' && inv.amount_paid > 0) await mailInvoice(inv, ws)
+      // El estado sale de la suscripción, no del evento de la factura (que puede llegar después de la baja).
+      const subRef = inv.parent?.subscription_details?.subscription
+      const subId = typeof subRef === 'string' ? subRef : subRef?.id
+      if (subId) {
+        const sub = await stripe().subscriptions.retrieve(subId).catch(() => null)
+        if (sub) syncSubscription(sub)
+      }
+      if (event.type === 'invoice.paid' && inv.amount_paid > 0 && ws) await mailInvoice(inv, ws)
       break
     }
   }
@@ -426,7 +513,7 @@ export async function handleWebhook(rawBody: string, signature: string | null): 
 }
 
 /** Factura por correo al cobrarla: número, importe y enlace al PDF de Stripe. */
-async function mailInvoice(inv: Stripe.Invoice, ws: Workspace | null) {
+async function mailInvoice(inv: Stripe.Invoice, ws: Workspace) {
   const to = inv.customer_email
   if (!to || !inv.invoice_pdf) return
   const es = (ws?.language ?? 'es') === 'es'

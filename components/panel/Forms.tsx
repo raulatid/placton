@@ -17,6 +17,7 @@ import {
   type ActionResult,
 } from '@/app/dashboard/actions'
 import { IconPlus, IconSpark } from '../icons'
+import { COUNTRIES, canonicalCountry } from '@/lib/countries'
 import { useT } from '../LangProvider'
 import { Select } from './Select'
 import { BrandAvatar, btnClass, Field, inputClass, Notice, PlatformTag, textareaClass } from '../ui'
@@ -144,20 +145,6 @@ export function AuditForm({ defaultUrl }: { defaultUrl: string }) {
 }
 
 // El valor guardado sigue en español (lo leen el motor y el onboarding); solo cambia la etiqueta.
-const COUNTRIES: { value: string; en: string }[] = [
-  { value: 'España', en: 'Spain' },
-  { value: 'México', en: 'Mexico' },
-  { value: 'Argentina', en: 'Argentina' },
-  { value: 'Colombia', en: 'Colombia' },
-  { value: 'Chile', en: 'Chile' },
-  { value: 'Perú', en: 'Peru' },
-  { value: 'Estados Unidos', en: 'United States' },
-  { value: 'Reino Unido', en: 'United Kingdom' },
-  { value: 'Francia', en: 'France' },
-  { value: 'Alemania', en: 'Germany' },
-  { value: 'Italia', en: 'Italy' },
-  { value: 'Portugal', en: 'Portugal' },
-]
 const LANGS: Record<string, { en: string; es: string }> = {
   es: { en: 'Spanish', es: 'Español' },
   en: { en: 'English', es: 'Inglés' },
@@ -261,7 +248,7 @@ export function WorkspaceForm({
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t('Search country', 'País de las búsquedas')}>
-            <Select name="country" label={t('Search country', 'País de las búsquedas')} defaultValue={ws.country} className="w-full" options={COUNTRIES.map((c) => ({ value: c.value, label: t(c.en, c.value) }))} />
+            <Select name="country" label={t('Search country', 'País de las búsquedas')} defaultValue={canonicalCountry(ws.country) ?? ws.country} className="w-full" options={COUNTRIES.map((c) => ({ value: c.value, label: t(c.en, c.value) }))} />
           </Field>
           <Field label={t('Language', 'Idioma')}>
             <Select name="language" label={t('Language', 'Idioma')} defaultValue={ws.language} className="w-full" options={Object.entries(LANGS).map(([k, v]) => ({ value: k, label: t(v.en, v.es) }))} />
@@ -333,7 +320,7 @@ export function InviteForm({ disabled }: { disabled: boolean }) {
   )
 }
 
-export function ProfileForm({ user }: { user: { firstName: string; lastName: string; email: string } }) {
+export function ProfileForm({ user }: { user: { firstName: string; lastName: string; email: string; passwordHash?: string | null; googleId?: string | null } }) {
   const [state, action, pending] = useActionState<ActionResult, FormData>(saveProfileAction, {})
   const t = useT()
   return (
@@ -346,9 +333,17 @@ export function ProfileForm({ user }: { user: { firstName: string; lastName: str
           <input name="lastName" defaultValue={user.lastName} className={inputClass} />
         </Field>
       </div>
-      <Field label={t('Email', 'Correo')}>
-        <input name="email" type="email" defaultValue={user.email} required className={inputClass} />
+      <Field
+        label={t('Email', 'Correo')}
+        hint={user.googleId ? t('It comes from your Google account.', 'Viene de tu cuenta de Google.') : undefined}
+      >
+        <input name="email" type="email" defaultValue={user.email} required readOnly={Boolean(user.googleId)} className={inputClass} />
       </Field>
+      {!user.googleId && user.passwordHash && (
+        <Field label={t('Current password (only to change your email)', 'Contraseña actual (solo para cambiar el correo)')}>
+          <input name="current" type="password" autoComplete="current-password" className={inputClass} />
+        </Field>
+      )}
       <Result state={state} />
       <button className={btnClass('primary')} disabled={pending}>
         {pending && <Spinner />}

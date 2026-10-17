@@ -1,18 +1,19 @@
 'use server'
 
+import { domainTrialUsed } from '@/lib/abuse'
 import { resolveCompetitorDomain } from '@/lib/brandDomain'
 import { revalidatePath } from 'next/cache'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { suggestPrompts } from '@/lib/ai'
 import { runAudit, saveAudit } from '@/lib/audit'
-import { canManage, endSession, hashPassword, passwordProblem, randomToken, requireCtx, requireUser, verifyPassword } from '@/lib/auth'
-import { appUrl, sendEmail } from '@/lib/email'
+import { canManage, endOtherSessions, endSession, hashPassword, passwordProblem, randomToken, requireCtx, requireUser, verifyPassword } from '@/lib/auth'
+import { appUrl, sendEmail, siteUrl } from '@/lib/email'
 import { libMessage } from '@/components/panel/format'
 import { availablePlatformIds } from '@/lib/engines'
 import { getT } from '@/lib/i18n'
 import { markInsightsRead } from '@/lib/insights'
-import { isPaidPlan, type Interval } from '@/lib/plans'
+import { isPaidPlan, PLANS, type Interval } from '@/lib/plans'
 import * as repo from '@/lib/repo'
 import * as billing from '@/lib/stripe'
 import { startRun } from '@/lib/tracking'
@@ -115,7 +116,10 @@ export async function dismissSuggestionAction(fd: FormData) {
 
 export async function moreSuggestionsAction(): Promise<ActionResult> {
   const { workspace } = await requireCtx()
-  const { t } = await getT()
+  const { lang, t } = await getT()
+  // Cuesta una consulta a la IA: solo con la prueba o la suscripción activas, y con freno.
+  if (!repo.accessOf(workspace).ok) return { error: t('Choose a plan to get new suggestions.', 'Elige un plan para recibir sugerencias nuevas.') }
+  if (repo.suggestionsOf(workspace.id).length >= 40) return { error: t('Review the suggestions you already have first.', 'Revisa antes las sugerencias que ya tienes.') }
   try {
     const items = await suggestPrompts(
       {
@@ -128,6 +132,7 @@ export async function moreSuggestionsAction(): Promise<ActionResult> {
         existing: [...repo.promptsOf(workspace.id), ...repo.suggestionsOf(workspace.id)].map((p) => p.text),
       },
       8,
+      lang,
     )
     repo.addSuggestions(workspace.id, items)
     revalidatePath('/dashboard/prompts')
@@ -144,14 +149,15 @@ export async function addCompetitorAction(_: ActionResult, fd: FormData): Promis
   const { t } = await getT()
   const name = s(fd, 'name')
   if (!name) return { error: t("Enter the competitor's name.", 'Escribe el nombre del competidor.') }
-  if (repo.competitorsOf(workspace.id).length >= 25) return { error: t('You can track up to 25 competitors.', 'Puedes seguir hasta 25 competidores.') }
+  if (repo.competitorsOf(workspace.id).length >= repo.MAX_COMPETITORS) return { error: t('You can track up to 25 competitors.', 'Puedes seguir hasta 25 competidores.') }
   const aliases = s(fd, 'aliases')
     .split(',')
     .map((a) => a.trim())
     .filter(Boolean)
   const id = repo.addCompetitor(workspace.id, name, s(fd, 'domain'), aliases)
-  if (!id) return { error: t('That competitor is already on the list.', 'Ese competidor ya está en la lista.') }
-  if (!s(fd, 'domain')) await resolveCompetitorDomain(workspace.id, id)
+  if (!id) return { error: t('That competitor is already on the list (or is your own brand).', 'Ese competidor ya está en la lista (o es tu propia marca).') }
+  // Buscar su web cuesta una consulta a la IA: solo con la suscripción activa.
+  if (!s(fd, 'domain') && repo.accessOf(workspace).ok) await resolveCompetitorDomain(workspace.id, id)
   revalidatePath('/dashboard/competitors')
   return { ok: t(`${name} added. You'll see it in new runs.`, `${name} añadido. Lo verás en las mediciones nuevas.`) }
 }
@@ -159,8 +165,8 @@ export async function addCompetitorAction(_: ActionResult, fd: FormData): Promis
 export async function quickAddCompetitorAction(fd: FormData) {
   const { workspace } = await requireCtx()
   const id = repo.addCompetitor(workspace.id, s(fd, 'name'), s(fd, 'domain'))
-  // Sin web no hay logo: se busca al momento (fuentes ya citadas o una búsqueda corta).
-  if (id && !s(fd, 'domain')) await resolveCompetitorDomain(workspace.id, id)
+  // Sin web no hay logo: se busca al momento (fuentes ya citadas o una búsqueda corta), si la suscripción está activa.
+  if (id && !s(fd, 'domain') && repo.accessOf(workspace).ok) await resolveCompetitorDomain(workspace.id, id)
   revalidatePath('/dashboard/competitors')
   revalidatePath('/dashboard')
 }
@@ -171,7 +177,9 @@ export async function updateCompetitorAction(fd: FormData) {
     .split(',')
     .map((a) => a.trim())
     .filter(Boolean)
-  if (s(fd, 'name')) repo.updateCompetitor(workspace.id, Number(fd.get('id')), s(fd, 'name'), s(fd, 'domain'), aliases)
+  const id = Number(fd.get('id'))
+  const name = s(fd, 'name').slice(0, 80)
+  if (name && !repo.brandNameTaken(workspace.id, name, id)) repo.updateCompetitor(workspace.id, id, name, s(fd, 'domain'), aliases)
   revalidatePath('/dashboard/competitors')
 }
 
@@ -194,6 +202,8 @@ export async function markIdeasReadAction() {
 export async function auditAction(_: ActionResult & { id?: number }, fd: FormData): Promise<ActionResult & { id?: number }> {
   const { workspace } = await requireCtx()
   const { lang, t } = await getT()
+  if (!repo.accessOf(workspace).ok) return { error: t('Choose a plan to run new audits.', 'Elige un plan para hacer auditorías nuevas.') }
+  if (repo.recentAudits(workspace.id) >= 10) return { error: t('You have run many audits in the last hour. Try again later.', 'Has hecho muchas auditorías en la última hora. Prueba más tarde.') }
   const url = s(fd, 'url') || workspace.domain
   if (!url) return { error: t('Enter the address of the website you want to audit.', 'Escribe la dirección de la web que quieres auditar.') }
   const res = await runAudit(url, lang)
@@ -208,9 +218,15 @@ export async function auditAction(_: ActionResult & { id?: number }, fd: FormDat
 export async function saveWorkspaceAction(_: ActionResult, fd: FormData): Promise<ActionResult> {
   const { workspace } = await managerCtx()
   const { t } = await getT()
+  const newDomain = s(fd, 'domain')
+  if (workspace.plan === 'trial' && newDomain && newDomain !== workspace.domain && domainTrialUsed(newDomain, workspace.id)) {
+    return { error: t('That website already had its free trial. Choose a plan to track it.', 'Esa web ya tuvo su prueba gratis. Elige un plan para medirla.') }
+  }
   const name = s(fd, 'name')
   const brandName = s(fd, 'brandName')
   if (!name || !brandName) return { error: t('The workspace and the brand both need a name.', 'El espacio y la marca necesitan nombre.') }
+  // El historial de la marca sigue con su nombre nuevo.
+  repo.rekeyBrand(workspace.id, workspace.brandName || workspace.name, brandName)
   repo.updateWorkspace(workspace.id, {
     name: name.slice(0, 80),
     brandName: brandName.slice(0, 80),
@@ -265,7 +281,10 @@ export async function deleteWorkspaceAction(fd: FormData) {
   if (role !== 'owner') return
   if (s(fd, 'confirm') !== workspace.name) return
   if (repo.membersOf(workspace.id).length > 1) return
-  if (workspace.stripeSubscriptionId && workspace.status !== 'canceled') await billing.cancelImmediately(workspace.stripeSubscriptionId)
+  // Primero se cancela el cobro; si Stripe falla, no se borra nada (si no, seguiría cobrando sin espacio).
+  if (workspace.stripeSubscriptionId && workspace.status !== 'canceled' && !(await billing.cancelImmediately(workspace.stripeSubscriptionId))) {
+    redirect(`/dashboard/settings/billing?error=${encodeURIComponent('No hemos podido cancelar la suscripción en Stripe. No se ha borrado nada: inténtalo de nuevo o escríbenos.')}`)
+  }
   repo.deleteWorkspace(workspace.id)
   const next = repo.workspacesOf(user.id)[0]
   repo.updateUser(user.id, { currentWorkspaceId: next?.id ?? null })
@@ -286,11 +305,12 @@ export async function inviteAction(_: ActionResult, fd: FormData): Promise<Actio
   if (limit !== null && taken >= limit) return { error: t(`Your plan allows ${limit} members. Upgrade to invite more.`, `Tu plan admite ${limit} miembros. Mejora el plan para invitar a más.`) }
   const existing = repo.userByEmail(email)
   if (existing && repo.roleIn(workspace.id, existing.id)) return { error: t('That person is already in the workspace.', 'Esa persona ya está en el espacio.') }
+  if (repo.recentInvites(workspace.id) >= 10) return { error: t('Too many invitations in the last hour. Try again later.', 'Demasiadas invitaciones en la última hora. Prueba más tarde.') }
 
   const invite = repo.createInvite(workspace.id, email, role, user.id, randomToken(24))
   const link = `${appUrl()}/invite/${invite.token}`
-  const inviter = repo.displayName(user)
-  const brand = workspace.brandName || workspace.name
+  const inviter = repo.displayName(user).slice(0, 60)
+  const brand = (workspace.brandName || workspace.name).slice(0, 80)
   // La invitación sale en el idioma de quien invita.
   const sent = await sendEmail({
     to: email,
@@ -298,8 +318,8 @@ export async function inviteAction(_: ActionResult, fd: FormData): Promise<Actio
     kind: 'invitacion',
     title: t(`You've been invited to ${workspace.name}`, `Te han invitado a ${workspace.name}`),
     body: t(
-      `${inviter} wants you to see with their team how ${brand} shows up in answers from ChatGPT, Claude, Google AI and Perplexity.`,
-      `${inviter} quiere que veas con su equipo cómo aparece ${brand} en las respuestas de ChatGPT, Claude, Google AI y Perplexity.`,
+      `${inviter} wants you to see with their team how ${brand} shows up in answers from ChatGPT, Claude, Google AI, Perplexity and Grok.`,
+      `${inviter} quiere que veas con su equipo cómo aparece ${brand} en las respuestas de ChatGPT, Claude, Google AI, Perplexity y Grok.`,
     ),
     cta: { label: t('Accept invitation', 'Aceptar invitación'), url: link },
     lang,
@@ -340,20 +360,66 @@ export async function removeMemberAction(fd: FormData) {
     return
   }
   repo.removeMember(workspace.id, target)
+  // Quien sale de una agencia sale también de todos sus clientes.
+  if (workspace.plan === 'agencia' && !workspace.billingOwnerId) {
+    for (const c of repo.agencyClients(workspace.id)) if (c.id !== workspace.id) repo.removeMember(c.id, target)
+  }
   if (self) redirect('/dashboard')
   revalidatePath('/dashboard/settings/members')
 }
 
+/* ───────────── Espacios nuevos ───────────── */
+
+/**
+ * «Nuevo espacio» o, en una agencia, «Nuevo cliente». Es un formulario (POST):
+ * un enlace externo no puede crear espacios ni gastar plazas de la agencia.
+ */
+export async function newWorkspaceAction() {
+  const user = await requireUser()
+  const { t } = await getT()
+  const spaces = repo.workspacesOf(user.id)
+  // Si ya hay uno a medias, se sigue con ese.
+  if (spaces.some((w) => !w.onboarded && w.role === 'owner')) redirect('/onboarding')
+  const current = user.currentWorkspaceId ? repo.workspaceById(user.currentWorkspaceId) : null
+  const owner = current ? repo.agencyOwnerOf(current) : null
+  if (owner) {
+    const role = repo.roleIn(owner.id, user.id)
+    if (!role || !canManage(role)) redirect('/dashboard')
+    if (!repo.accessOf(owner).ok) redirect('/dashboard/plans')
+    // Con la bolsa de prompts agotada, el cliente nuevo no podría terminar el alta.
+    if (repo.agencyPromptsUsed(owner.id) >= (owner.promptPool || PLANS.agencia.prompts))
+      redirect(`/dashboard/settings/billing?error=${encodeURIComponent('Tu bolsa de prompts está agotada. Añade más antes de crear otro cliente.')}`)
+    const client = repo.createClientWorkspace(user.id, owner, 'New client')
+    if (!client) redirect(`/dashboard/settings/billing?error=${encodeURIComponent('Has usado todos los clientes de tu plan. Añade más aquí.')}`)
+    redirect('/onboarding')
+  }
+  if (spaces.some((w) => w.onboarded) && !repo.canCreateWorkspace(user.id)) {
+    redirect(`/dashboard/settings/billing?error=${encodeURIComponent('La prueba gratis incluye un solo espacio. Elige un plan para crear más.')}`)
+  }
+  repo.createWorkspace(user.id, 'My workspace')
+  redirect('/onboarding')
+}
+
 /* ───────────── Pagos ───────────── */
 
+/**
+ * La facturación se decide con el papel en el espacio QUE PAGA: en un cliente de
+ * agencia es la agencia. Ser administrador de un cliente no da acceso a la
+ * suscripción, la tarjeta ni las facturas de la agencia.
+ */
+async function billingCtx(opts?: { allowUnonboarded?: boolean }) {
+  const ctx = await requireCtx(opts)
+  const payer = repo.agencyOwnerOf(ctx.workspace) ?? ctx.workspace
+  const role = payer.id === ctx.workspace.id ? ctx.role : repo.roleIn(payer.id, ctx.user.id)
+  return { ...ctx, payer, canBill: Boolean(role && canManage(role)) }
+}
+
 export async function checkoutAction(fd: FormData) {
-  const { workspace, user, role } = await requireCtx({ allowUnonboarded: true })
-  if (!canManage(role)) redirect('/dashboard/plans?error=permiso')
+  const { user, payer, canBill } = await billingCtx({ allowUnonboarded: true })
+  if (!canBill) redirect('/dashboard/plans?error=permiso')
   const plan = s(fd, 'plan')
   const interval: Interval = s(fd, 'interval') === 'year' ? 'year' : 'month'
   if (!isPaidPlan(plan)) redirect('/dashboard/plans')
-  // Un cliente de agencia contrata a través del espacio que paga.
-  const payer = repo.agencyOwnerOf(workspace) ?? workspace
   const res = await billing.checkout(payer, user, plan, interval, await origin(), Number(s(fd, 'clients')) || 1, Number(s(fd, 'prompts')) || 0)
   if ('url' in res) redirect(res.url)
   if ('changed' in res) redirect('/dashboard/settings/billing?cambio=1')
@@ -361,8 +427,8 @@ export async function checkoutAction(fd: FormData) {
 }
 
 export async function setClientsAction(fd: FormData) {
-  const { workspace, role } = await requireCtx()
-  if (!canManage(role)) redirect('/dashboard/settings/billing')
+  const { workspace, canBill } = await billingCtx()
+  if (!canBill) redirect('/dashboard/settings/billing')
   const owner = repo.agencyOwnerOf(workspace)
   if (!owner) redirect('/dashboard/plans')
   const res = await billing.setAgency(owner, Number(s(fd, 'clients')) || 0, Number(s(fd, 'prompts')) || 0)
@@ -372,17 +438,17 @@ export async function setClientsAction(fd: FormData) {
 }
 
 export async function portalAction() {
-  const { workspace, role } = await requireCtx({ allowUnonboarded: true })
-  if (!canManage(role)) redirect('/dashboard/settings/billing')
-  const res = await billing.portal(repo.agencyOwnerOf(workspace) ?? workspace, await origin())
+  const { payer, canBill } = await billingCtx({ allowUnonboarded: true })
+  if (!canBill) redirect('/dashboard/settings/billing')
+  const res = await billing.portal(payer, await origin())
   if ('url' in res) redirect(res.url)
   redirect(`/dashboard/settings/billing?error=${encodeURIComponent(res.error)}`)
 }
 
 export async function cancelSubscriptionAction(fd: FormData) {
-  const { workspace, role } = await requireCtx()
-  if (!canManage(role)) return
-  const res = await billing.cancelAtPeriodEnd(repo.agencyOwnerOf(workspace) ?? workspace, fd.get('undo') !== '1')
+  const { payer, canBill } = await billingCtx()
+  if (!canBill) return
+  const res = await billing.cancelAtPeriodEnd(payer, fd.get('undo') !== '1')
   if ('error' in res) redirect(`/dashboard/settings/billing?error=${encodeURIComponent(res.error)}`)
   revalidatePath('/dashboard', 'layout')
   redirect('/dashboard/settings/billing')
@@ -399,7 +465,27 @@ export async function saveProfileAction(_: ActionResult, fd: FormData): Promise<
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: t("That email doesn't look valid.", 'Ese correo no parece válido.') }
   const other = repo.userByEmail(email)
   if (other && other.id !== user.id) return { error: t('Another account already uses that email.', 'Ese correo ya lo usa otra cuenta.') }
+  const changing = email !== user.email.toLowerCase()
+  if (changing) {
+    // El correo de una cuenta de Google lo pone Google; en las demás, cambiarlo exige la contraseña.
+    if (user.googleId) return { error: t('Your email comes from your Google account and cannot be changed here.', 'Tu correo viene de tu cuenta de Google y no se puede cambiar aquí.') }
+    if (!user.passwordHash || !(await verifyPassword(String(fd.get('current') ?? ''), user.passwordHash)))
+      return { error: t('Enter your current password to change your email.', 'Escribe tu contraseña actual para cambiar el correo.') }
+  }
   repo.updateUser(user.id, { firstName, lastName: s(fd, 'lastName'), email })
+  if (changing) {
+    // Los enlaces y sesiones anteriores dejan de valer, y se avisa a la dirección antigua.
+    repo.clearPasswordResets(user.id)
+    await endOtherSessions(user.id)
+    await sendEmail({
+      to: user.email,
+      subject: 'Placton: el correo de tu cuenta ha cambiado',
+      kind: 'cambio-correo',
+      title: 'Has cambiado el correo de tu cuenta',
+      body: `El correo de tu cuenta de Placton es ahora ${email}. Si no has sido tú, escríbenos a contact@placton.tech cuanto antes.`,
+      lang: 'es',
+    })
+  }
   revalidatePath('/dashboard', 'layout')
   return { ok: t('Profile saved.', 'Perfil guardado.') }
 }
@@ -413,7 +499,10 @@ export async function changePasswordAction(_: ActionResult, fd: FormData): Promi
   const problem = passwordProblem(next)
   if (problem) return { error: libMessage(problem, lang) }
   repo.updateUser(user.id, { passwordHash: await hashPassword(next) })
-  return { ok: t('Password changed.', 'Contraseña cambiada.') }
+  // Las demás sesiones (otro navegador, otra persona) se cierran.
+  repo.clearPasswordResets(user.id)
+  await endOtherSessions(user.id)
+  return { ok: t('Password changed. Other sessions have been signed out.', 'Contraseña cambiada. Se han cerrado las demás sesiones.') }
 }
 
 export async function deleteAccountAction(_: ActionResult, fd: FormData): Promise<ActionResult> {
@@ -421,8 +510,21 @@ export async function deleteAccountAction(_: ActionResult, fd: FormData): Promis
   const { t } = await getT()
   // Vale la palabra de cualquiera de los dos idiomas: DELETE o BORRAR.
   if (!['borrar', 'delete'].includes(s(fd, 'confirm').toLowerCase())) return { error: t('Type DELETE to confirm.', 'Escribe BORRAR para confirmar.') }
-  const { stripeSubscriptions } = repo.deleteUser(user.id)
-  for (const sub of stripeSubscriptions) await billing.cancelImmediately(sub)
+  const plan = repo.deletionPlan(user.id)
+  if (plan.sharedPaid.length) {
+    return {
+      error: t(
+        `You own a paid workspace shared with others (${plan.sharedPaid.join(', ')}). Cancel its subscription or hand over ownership before deleting your account.`,
+        `Eres propietario de un espacio de pago compartido (${plan.sharedPaid.join(', ')}). Cancela su suscripción o pasa la propiedad antes de borrar tu cuenta.`,
+      ),
+    }
+  }
+  // Primero se cancelan los cobros; si Stripe falla, no se borra nada.
+  for (const sub of plan.cancel) {
+    if (!(await billing.cancelImmediately(sub)))
+      return { error: t("We couldn't cancel your subscription in Stripe. Nothing was deleted: please try again or write to us.", 'No hemos podido cancelar tu suscripción en Stripe. No se ha borrado nada: inténtalo de nuevo o escríbenos.') }
+  }
+  repo.deleteUser(user.id)
   await endSession()
-  redirect('/?cuenta=borrada')
+  redirect(`${siteUrl()}/?cuenta=borrada`)
 }

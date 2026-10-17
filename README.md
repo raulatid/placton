@@ -23,7 +23,7 @@ npm run dev                  # http://localhost:3490
 | `/onboarding` | Alta: web → marca → competidores → prompts → primera medición |
 | `/dashboard` | Resumen, Prompts, Competitors, Mentions, Searches, Sources, Insights, AI Site Audit, Help, Settings (General, Members, Billing), Plans, Account |
 | `/admin` | Interno (solo `PLACTON_ADMIN_EMAILS`): clientes, ingreso recurrente, coste de API y errores |
-| `/api/cron` | Disparo externo de la medición diaria (`Authorization: Bearer CRON_SECRET`) |
+| `/api/cron` | Disparo externo de la medición (semanal por espacio) (`Authorization: Bearer CRON_SECRET`) |
 | `/api/stripe/webhook` | Webhook de Stripe |
 
 ## Planes y pasarela
@@ -73,7 +73,7 @@ de 75 $/mes de API frente a 59 $ de precio. Hay que elegir: modelo de Claude má
 (`PLACTON_CLAUDE_MODEL`), medir Claude en días alternos o subir precios. `/admin` enseña el coste real
 por espacio y plataforma.
 
-## Medición diaria
+## Medición semanal
 
 `instrumentation.ts` lanza cada hora (desde las 7:00 de Madrid) la medición de los espacios que aún no
 tienen el día. Apagado en desarrollo para no gastar API sin querer (`PLACTON_SCHEDULER=1` lo

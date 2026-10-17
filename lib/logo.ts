@@ -1,8 +1,7 @@
-import { lookup } from 'node:dns/promises'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { isIP } from 'node:net'
 import path from 'node:path'
 import sharp from 'sharp'
+import { publicFetch, readCapped } from './netguard'
 
 // Logos de marca «tipo icono de app», como los de Lima: el icono grande de la
 // web de la marca (apple-touch-icon o un icono de 96 px o más) a sangre en un
@@ -33,55 +32,12 @@ export function cleanDomain(raw: string | null | undefined): string | null {
 
 // ─── Descargas seguras: solo webs públicas, nunca la red interna ───
 
-function privateAddress(ip: string): boolean {
-  const v4 = ip.startsWith('::ffff:') ? ip.slice(7) : ip
-  if (isIP(v4) === 4) {
-    const [a, b] = v4.split('.').map(Number)
-    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224
-  }
-  const v6 = ip.toLowerCase()
-  return v6 === '::' || v6 === '::1' || v6.startsWith('fc') || v6.startsWith('fd') || v6.startsWith('fe80')
-}
-
-async function publicHost(host: string): Promise<boolean> {
-  if (isIP(host)) return false
-  try {
-    const addrs = await lookup(host, { all: true })
-    return addrs.length > 0 && addrs.every((a) => !privateAddress(a.address))
-  } catch {
-    return false
-  }
-}
-
 async function safeFetch(url: string, accept: string): Promise<{ body: Buffer; type: string; url: string } | null> {
-  let current = url
-  for (let hop = 0; hop < 4; hop++) {
-    let u: URL
-    try {
-      u = new URL(current)
-    } catch {
-      return null
-    }
-    if ((u.protocol !== 'https:' && u.protocol !== 'http:') || !(await publicHost(u.hostname))) return null
-    let res: Response
-    try {
-      res = await fetch(u, { redirect: 'manual', headers: { 'user-agent': UA, accept }, signal: AbortSignal.timeout(7000) })
-    } catch {
-      return null
-    }
-    if (res.status >= 300 && res.status < 400) {
-      const next = res.headers.get('location')
-      if (!next) return null
-      current = new URL(next, u).toString()
-      continue
-    }
-    if (!res.ok) return null
-    if (Number(res.headers.get('content-length') ?? 0) > MAX_BYTES) return null
-    const body = Buffer.from(await res.arrayBuffer())
-    if (body.length > MAX_BYTES) return null
-    return { body, type: res.headers.get('content-type') ?? '', url: u.toString() }
-  }
-  return null
+  const got = await publicFetch(url, { headers: { 'user-agent': UA, accept }, timeoutMs: 7000 })
+  if (!got || !got.res.ok) return null
+  const body = await readCapped(got.res, MAX_BYTES + 1)
+  if (!body || body.length > MAX_BYTES) return null
+  return { body, type: got.res.headers.get('content-type') ?? '', url: got.url }
 }
 
 // ─── Dónde buscar el icono ───

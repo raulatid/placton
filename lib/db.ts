@@ -271,6 +271,15 @@ CREATE TABLE IF NOT EXISTS error_log (
 );
 CREATE INDEX IF NOT EXISTS idx_error_log_created ON error_log(createdAt);
 
+CREATE TABLE IF NOT EXISTS trial_log (
+  workspaceId INTEGER PRIMARY KEY,
+  userId INTEGER,
+  domain TEXT NOT NULL DEFAULT '',
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trial_log_domain ON trial_log(domain);
+CREATE INDEX IF NOT EXISTS idx_trial_log_user ON trial_log(userId);
+
 CREATE TABLE IF NOT EXISTS cost_snapshots (
   day TEXT NOT NULL,
   source TEXT NOT NULL,
@@ -319,6 +328,12 @@ export function db(): DatabaseSync {
     'ALTER TABLE answers ADD COLUMN promptKey TEXT',
     'ALTER TABLE answers ADD COLUMN reusedFrom INTEGER',
     'CREATE INDEX IF NOT EXISTS idx_answers_pool ON answers(promptKey, engine, day)',
+    // Impagos: desde cuándo, para cortar el acceso tras los días de gracia.
+    'ALTER TABLE workspaces ADD COLUMN pastDueSince TEXT',
+    // Prompts borrados: se archivan (su historial de respuestas se conserva).
+    'ALTER TABLE prompts ADD COLUMN deletedAt TEXT',
+    // Pruebas ya usadas (permanente): borrar el espacio o la cuenta no da otra prueba.
+    "INSERT OR IGNORE INTO trial_log (workspaceId, userId, domain, createdAt) SELECT id, createdBy, lower(domain), createdAt FROM workspaces WHERE onboarded = 1 AND billingOwnerId IS NULL",
   ]) {
     try {
       conn.exec(sql)

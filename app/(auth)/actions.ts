@@ -2,7 +2,6 @@
 
 import { clientIp, recordSignup, signupAllowed } from '@/lib/abuse'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
 import {
   consumePasswordReset,
   createPasswordReset,
@@ -35,8 +34,7 @@ function str(fd: FormData, k: string): string {
 // Freno sencillo a la fuerza bruta: intentos por IP en memoria.
 const attempts = new Map<string, { n: number; until: number }>()
 async function throttled(scope: string): Promise<boolean> {
-  const h = await headers()
-  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim() || h.get('x-real-ip') || 'local'
+  const ip = await clientIp()
   const k = `${scope}:${ip}`
   const now = Date.now()
   const a = attempts.get(k)
@@ -65,8 +63,9 @@ export async function registerAction(_: FormState, fd: FormData): Promise<FormSt
   const ip = await clientIp()
   if (!signupAllowed(ip)) return { error: t('Too many new accounts from this connection today. Try again tomorrow or contact us.', 'Demasiadas cuentas nuevas desde esta conexión hoy. Prueba mañana o escríbenos.'), fields }
 
-  const user = repo.createUser({ email, firstName, lastName, passwordHash: await hashPassword(password) })
+  // Se apunta antes de esperar al cifrado: varias altas a la vez no se cuelan del límite.
   recordSignup(ip)
+  const user = repo.createUser({ email, firstName, lastName, passwordHash: await hashPassword(password) })
   await startSession(user.id)
   void sendEmail({
     to: user.email,

@@ -17,6 +17,7 @@ import {
   money,
   YEARLY_DISCOUNT,
   type Interval,
+  TRIAL_DAYS,
 } from '@/lib/plans'
 import { IconCheck } from './icons'
 import { useLang, useT } from './LangProvider'
@@ -26,6 +27,7 @@ const PROMPT_PRESETS = [100, 250, 500, 1000, 2500]
 
 function Stepper({ value, onChange, min, max, step, label, unit }: { value: number; onChange: (n: number) => void; min: number; max: number; step: number; label: string; unit: string }) {
   const t = useT()
+  const loc = useLang() === 'es' ? 'es-ES' : 'en-US'
   const pct = ((value - min) / (max - min)) * 100
   return (
     <div>
@@ -40,7 +42,7 @@ function Stepper({ value, onChange, min, max, step, label, unit }: { value: numb
           −
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <div className="text-[34px] font-extrabold leading-none tracking-[-0.04em] text-ink num">{value.toLocaleString('en-US')}</div>
+          <div className="text-[34px] font-extrabold leading-none tracking-[-0.04em] text-ink num">{value.toLocaleString(loc)}</div>
           <div className="mt-1 text-[12px] font-semibold text-mute">{unit}</div>
         </div>
         <button
@@ -93,6 +95,7 @@ export function AgencyCalculator({
 }) {
   const t = useT()
   const lang = useLang()
+  const loc = lang === 'es' ? 'es-ES' : 'en-US'
   const [own, setOwn] = useState<Interval>('month')
   const interval = controlled ?? own
   const minClients = Math.max(AGENCY_MIN, usedClients)
@@ -149,7 +152,7 @@ export function AgencyCalculator({
                 const from = i === 0 ? AGENCY_PROMPTS_MIN : (AGENCY_PROMPT_TIERS[i - 1].upTo ?? 0) + 1
                 return (
                   <div key={i} className={cx('flex justify-between py-0.5 num', tier.monthly === perPromptMonth && 'font-bold text-brand')}>
-                    <span>{tier.upTo ? `${from.toLocaleString('en-US')}–${tier.upTo.toLocaleString('en-US')}` : t(`${from.toLocaleString('en-US')} or more`, `${from.toLocaleString('en-US')} o más`)}</span>
+                    <span>{tier.upTo ? `${from.toLocaleString(loc)}–${tier.upTo.toLocaleString(loc)}` : t(`${from.toLocaleString(loc)} or more`, `${from.toLocaleString(loc)} o más`)}</span>
                     <span>
                       {money(tier.monthly, lang)} {t('/ prompt / month', '/ prompt / mes')}
                     </span>
@@ -207,7 +210,7 @@ export function AgencyCalculator({
                       prompts === p ? 'border-deep bg-deep text-white' : 'border-line bg-white text-ink-2 hover:border-faint',
                     )}
                   >
-                    {p.toLocaleString('en-US')}
+                    {p.toLocaleString(loc)}
                   </button>
                 ))}
               </div>
@@ -227,7 +230,7 @@ export function AgencyCalculator({
               </div>
               <div className="flex justify-between num">
                 <span>
-                  {prompts.toLocaleString('en-US')} {t('prompts', 'prompts')} × {money(monthlyView(q.promptUnit), lang)}
+                  {prompts.toLocaleString(loc)} {t('prompts', 'prompts')} × {money(monthlyView(q.promptUnit), lang)}
                 </span>
                 <span className="font-semibold text-ink">{money(monthlyView(q.promptsTotal), lang)}</span>
               </div>
@@ -244,8 +247,8 @@ export function AgencyCalculator({
           <p className="mt-2 h-5 text-[12.5px] text-mute">
             {nextFrom
               ? t(
-                  `From ${nextFrom.toLocaleString('en-US')} prompts each one costs ${money(agencyPromptMonthly(nextFrom), lang)} a month.`,
-                  `Desde ${nextFrom.toLocaleString('en-US')} prompts cada uno cuesta ${money(agencyPromptMonthly(nextFrom), lang)} al mes.`,
+                  `From ${nextFrom.toLocaleString(loc)} prompts each one costs ${money(agencyPromptMonthly(nextFrom), lang)} a month.`,
+                  `Desde ${nextFrom.toLocaleString(loc)} prompts cada uno cuesta ${money(agencyPromptMonthly(nextFrom), lang)} al mes.`,
                 )
               : t('Best price per prompt.', 'El mejor precio por prompt.')}
           </p>
@@ -255,7 +258,7 @@ export function AgencyCalculator({
               href={`/signup?plan=agencia&interval=${interval}&clients=${clients}&prompts=${prompts}`}
               className="mt-4 flex h-12 w-full items-center justify-center rounded-full bg-deep text-[15px] font-semibold text-white transition-colors hover:bg-deep-2"
             >
-              {t('Start 7-day free trial', 'Empieza 7 días gratis')}
+              {t(`Start ${TRIAL_DAYS}-day free trial`, `Empieza ${TRIAL_DAYS} días gratis`)}
             </Link>
           ) : (
             <form action={action} className="mt-4">

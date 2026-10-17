@@ -14,7 +14,7 @@ export async function helpContactAction(_: { ok?: string; error?: string }, fd: 
   saveContact({ name: String(fd.get('name') ?? ''), email: user.email, topic, message, userId: user.id })
   const to = process.env.PLACTON_SUPPORT_EMAIL
   if (to) {
-    await sendEmail({ to, subject: `[Placton · ${topic}] ${user.email}`, kind: 'soporte', title: `${topic} de ${user.email}`, body: message.replace(/</g, '&lt;').replace(/\n/g, '<br>'), lang: 'es' })
+    await sendEmail({ to, subject: `[Placton · ${topic}] ${user.email}`, kind: 'soporte', title: `${topic} de ${user.email}`, body: message, lang: 'es' })
   }
   return { ok: t("Got it. We'll reply by email as soon as possible.", 'Recibido. Te contestamos por correo lo antes posible.') }
 }

@@ -24,7 +24,7 @@ export default async function SettingsPage() {
         <CardHeader title={t('Brand and market', 'Marca y mercado')} />
         <div className="px-6 pb-6">
           {!manage && <div className="mb-4"><Notice tone="info">{t('Only workspace admins can change these details.', 'Solo quien administra el espacio puede cambiar estos datos.')}</Notice></div>}
-          <WorkspaceForm ws={ws} disabled={!manage} />
+          <WorkspaceForm ws={{ name: ws.name, brandName: ws.brandName, domain: ws.domain, aliases: ws.aliases, description: ws.description, country: ws.country, language: ws.language }} disabled={!manage} />
         </div>
       </Card>
       <div className="space-y-4">

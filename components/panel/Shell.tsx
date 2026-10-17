@@ -23,6 +23,7 @@ export interface ShellProps {
   unreadIdeas: number
   admin: boolean
   switchAction: (fd: FormData) => void
+  newSpaceAction: () => void
   logoutAction: () => void
   children: React.ReactNode
 }
@@ -40,7 +41,7 @@ const PanelIcon = () => (
 )
 
 /** Selector de espacio, abajo del todo de la barra lateral; el menú se abre hacia arriba. */
-function WorkspaceSwitcher({ workspace, spaces, switchAction, onNavigate, collapsed, agency, canCreateSpace }: Pick<ShellProps, 'workspace' | 'spaces' | 'switchAction' | 'agency' | 'canCreateSpace'> & { onNavigate?: () => void; collapsed?: boolean }) {
+function WorkspaceSwitcher({ workspace, spaces, switchAction, newSpaceAction, onNavigate, collapsed, agency, canCreateSpace }: Pick<ShellProps, 'workspace' | 'spaces' | 'switchAction' | 'newSpaceAction' | 'agency' | 'canCreateSpace'> & { onNavigate?: () => void; collapsed?: boolean }) {
   const t = useT()
   return (
     <details className="group relative">
@@ -79,10 +80,12 @@ function WorkspaceSwitcher({ workspace, spaces, switchAction, onNavigate, collap
         ))}
         <div className="my-1 border-t border-line-2" />
         {agency || canCreateSpace ? (
-          <Link href="/onboarding?new=1" className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-semibold text-ink-2 hover:bg-line-2">
-            <IconPlus size={15} />{' '}
-            {agency ? t(`New client (${agency.used} of ${agency.seats})`, `Nuevo cliente (${agency.used} de ${agency.seats})`) : t('New workspace', 'Nuevo espacio')}
-          </Link>
+          <form action={newSpaceAction}>
+            <button className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-ink-2 hover:bg-line-2">
+              <IconPlus size={15} />{' '}
+              {agency ? t(`New client (${agency.used} of ${agency.seats})`, `Nuevo cliente (${agency.used} de ${agency.seats})`) : t('New workspace', 'Nuevo espacio')}
+            </button>
+          </form>
         ) : (
           <Link
             href="/dashboard/settings/billing"
@@ -176,7 +179,7 @@ function Sidebar(props: Omit<ShellProps, 'children'> & { onNavigate?: () => void
         </Link>
       )}
       {!collapsed && <PlanCard plan={plan} onNavigate={onNavigate} />}
-      <WorkspaceSwitcher workspace={props.workspace} spaces={props.spaces} switchAction={props.switchAction} onNavigate={onNavigate} collapsed={collapsed} agency={props.agency} canCreateSpace={props.canCreateSpace} />
+      <WorkspaceSwitcher workspace={props.workspace} spaces={props.spaces} switchAction={props.switchAction} onNavigate={onNavigate} collapsed={collapsed} agency={props.agency} canCreateSpace={props.canCreateSpace} newSpaceAction={props.newSpaceAction} />
     </div>
   )
 }

@@ -7,6 +7,8 @@ import { useEffect } from 'react'
 export function Track() {
   const path = usePathname()
   useEffect(() => {
+    // Las páginas con un token en la dirección (invitaciones, cambio de contraseña) no se cuentan.
+    if (/^\/(invite|reset-password)\//.test(path)) return
     try {
       const utm = new URLSearchParams(window.location.search).get('utm_source') ?? ''
       const body = JSON.stringify({ path, ref: document.referrer, utm, lang: navigator.language })

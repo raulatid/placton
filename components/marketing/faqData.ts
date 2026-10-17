@@ -159,8 +159,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: bi('Can I cancel anytime?', '¿Puedo cancelar cuando quiera?'),
         a: [
           bi(
-            'Yes, there is no minimum term. Go to Workspace settings, open Subscription and click to manage it: the Stripe portal opens and you can cancel in a moment.',
-            'Sí, no hay permanencia. Entra en Ajustes del espacio, abre Suscripción y pulsa para gestionarla: se abrirá el portal de Stripe, donde puedes cancelar en un momento.',
+            'Yes, there is no minimum term. Go to Workspace settings, open Billing and choose «Cancel at the end of the period». You keep access until then.',
+            'Sí, no hay permanencia. Entra en Ajustes del espacio, abre Suscripción y pulsa «Cancelar al final del periodo». Sigues teniendo acceso hasta entonces.',
           ),
           bi('You keep access until the end of the period you have already paid for.', 'Seguirás teniendo acceso hasta el final del periodo que ya has pagado.'),
         ],
@@ -170,8 +170,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: bi('How do I get my invoices?', '¿Cómo recibo las facturas?'),
         a: [
           bi(
-            'Stripe emails you an invoice with every payment. You can also view and download them at any time from the Stripe portal, under Workspace settings, Subscription.',
-            'Stripe te envía la factura por correo con cada cobro. También puedes consultarlas y descargarlas cuando quieras desde el portal de Stripe, en Ajustes del espacio, Suscripción.',
+            'An invoice is issued automatically with every payment and emailed to you. You can also download them at any time under Workspace settings, Billing.',
+            'Cada cobro genera su factura, que te enviamos por correo. También puedes descargarlas cuando quieras en Ajustes del espacio, Suscripción.',
           ),
           bi(
             `Prices are in US dollars and taxes may apply depending on your country. If you pay yearly, you save ${D}% compared with paying monthly.`,

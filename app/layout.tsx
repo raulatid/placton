@@ -17,9 +17,12 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description:
       lang === 'es'
-        ? 'Placton mide cada semana qué responden ChatGPT, Claude, Google AI y Perplexity cuando tus clientes preguntan por lo que vendes.'
-        : 'Placton checks every week what ChatGPT, Claude, Google AI and Perplexity answer when your customers ask about what you sell.',
+        ? 'Placton mide cada semana qué responden ChatGPT, Claude, Google AI, Perplexity y Grok cuando tus clientes preguntan por lo que vendes.'
+        : 'Placton checks every week what ChatGPT, Claude, Google AI, Perplexity and Grok answer when your customers ask about what you sell.',
     icons: { icon: '/icon.svg' },
+    // Cómo se ve un enlace compartido (LinkedIn, X, WhatsApp…); la imagen sale de app/opengraph-image.tsx.
+    openGraph: { type: 'website', siteName: 'Placton', locale: lang === 'es' ? 'es_ES' : 'en_US' },
+    twitter: { card: 'summary_large_image' },
   }
 }
 

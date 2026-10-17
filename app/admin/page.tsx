@@ -6,7 +6,7 @@ import { Logo } from '@/components/Logo'
 import { cx, fmtDate, PLATFORM_META, PlatformDot, segmentItem, segmentWrap } from '@/components/ui'
 import { dataForSeoBalance, openRouterData, stripeData } from '@/lib/admin/external'
 import { buildReport, period, planLabel, RANGES, type RangeId } from '@/lib/admin/stats'
-import { isAdminEmail, requireUser } from '@/lib/auth'
+import { isAdmin, requireUser } from '@/lib/auth'
 import { addDays, all, one, today } from '@/lib/db'
 import { platforms } from '@/lib/engines'
 import { stripeMode } from '@/lib/stripe'
@@ -31,7 +31,7 @@ const NAV = [
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ r?: string; fresh?: string }> }) {
   const user = await requireUser('/admin')
-  if (!isAdminEmail(user.email)) return <NoAccess email={user.email} />
+  if (!isAdmin(user)) return <NoAccess email={user.email} />
 
   const sp = await searchParams
   const p = period(sp.r)

@@ -29,7 +29,15 @@ export function cookieDomain(): string | undefined {
   return process.env.PLACTON_COOKIE_DOMAIN || undefined
 }
 
-function layout(title: string, body: string, cta?: { label: string; url: string }, lang: 'en' | 'es' = 'en'): string {
+/** Todo lo que entra en un correo es texto: nunca HTML de nadie (nombres de espacio, mensajes…). */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+function layout(rawTitle: string, rawBody: string, rawCta?: { label: string; url: string }, lang: 'en' | 'es' = 'en'): string {
+  const title = esc(rawTitle)
+  const body = esc(rawBody).replace(/\n/g, '<br>')
+  const cta = rawCta && /^https?:\/\//.test(rawCta.url) ? { label: esc(rawCta.label), url: esc(rawCta.url) } : undefined
   return `<!doctype html><html lang="${lang}"><body style="margin:0;background:#f4f7f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0c1b1f">
   <div style="max-width:520px;margin:0 auto;padding:40px 24px">
     <div style="font-weight:800;font-size:20px;letter-spacing:-0.02em;margin-bottom:28px">placton</div>

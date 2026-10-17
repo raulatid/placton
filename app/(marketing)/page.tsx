@@ -19,8 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { absolute: t('Placton · Make AI recommend your brand', 'Placton · Haz que la IA recomiende tu marca') },
     description: t(
-      'Placton asks ChatGPT, Claude, Google AI and Perplexity what your customers ask, every week, and shows who appears, in what position and why. 7-day free trial, no card required.',
-      'Placton pregunta cada semana a ChatGPT, Claude, Google AI y Perplexity lo mismo que tus clientes y te enseña quién aparece, en qué puesto y por qué. Prueba 7 días gratis, sin tarjeta.',
+      'Placton asks ChatGPT, Claude, Google AI, Perplexity and Grok what your customers ask, every week, and shows who appears, in what position and why. 7-day free trial, no card required.',
+      'Placton pregunta cada semana a ChatGPT, Claude, Google AI, Perplexity y Grok lo mismo que tus clientes y te enseña quién aparece, en qué puesto y por qué. Prueba 7 días gratis, sin tarjeta.',
     ),
     alternates: { canonical: '/' },
   }
@@ -37,17 +37,53 @@ const HERO_FADE: React.CSSProperties = {
 const HERO_PLATFORMS = [
   { id: 'chatgpt', name: 'ChatGPT' },
   { id: 'claude', name: 'Claude' },
-  { id: 'gemini', name: 'Gemini' },
+  { id: 'gemini', name: 'Google AI' },
   { id: 'perplexity', name: 'Perplexity' },
   { id: 'grok', name: 'Grok' },
 ]
 
-export default async function HomePage() {
+// Datos estructurados para buscadores y asistentes: quién es Placton y qué vende.
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Placton',
+      legalName: 'SELSPY AGENCY S. COOP.',
+      url: 'https://placton.tech',
+      logo: 'https://placton.tech/icon.svg',
+      email: 'contact@placton.tech',
+      address: { '@type': 'PostalAddress', streetAddress: 'Paseo la Fuente 9, 4.º A', postalCode: '30007', addressLocality: 'Murcia', addressCountry: 'ES' },
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Placton',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      url: 'https://placton.tech',
+      description: 'Weekly brand visibility tracking on ChatGPT, Claude, Google AI Overviews, Perplexity and Grok.',
+      offers: [
+        { '@type': 'Offer', name: 'Starter', price: '59', priceCurrency: 'USD' },
+        { '@type': 'Offer', name: 'Growth', price: '129', priceCurrency: 'USD' },
+        { '@type': 'Offer', name: 'Scale', price: '299', priceCurrency: 'USD' },
+      ],
+    },
+  ],
+}
+
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ cuenta?: string }> }) {
   const { lang, t } = await getT()
   const faq = faqByIds(HOME_FAQ)
+  const deleted = (await searchParams).cuenta === 'borrada'
 
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
+      {deleted && (
+        <div className="relative z-30 mx-auto mt-24 w-fit max-w-[92vw] rounded-full border border-line bg-white px-5 py-2.5 text-center text-[14px] font-semibold text-ink-2 shadow-[0_8px_24px_-12px_rgba(4,25,28,0.25)]">
+          {t('Your account has been deleted. Thanks for trying Placton.', 'Tu cuenta se ha borrado. Gracias por probar Placton.')}
+        </div>
+      )}
       {/* Portada + vista del producto sobre un mismo fondo: el degradado sigue por
           detrás de la ventana y se funde con la página, sin cortes. */}
       <div className="relative">

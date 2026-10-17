@@ -81,8 +81,8 @@ export function RunStatus({ initial, canRun }: { initial: Status; canRun: boolea
             if (res.error) setMsg(res.error)
             else {
               setMsg(null)
-              wasActive.current = true
-              setStatus((s) => ({ ...s, active: { id: 0, done: 0, total: 1 } }))
+              // La página se vuelve a pintar con la medición en marcha y una sola barra de progreso.
+              router.refresh()
             }
           })
         }

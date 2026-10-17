@@ -2,6 +2,7 @@ import 'server-only'
 import Anthropic from '@anthropic-ai/sdk'
 import { responses } from './openai'
 import { openRouter, openRouterReady } from './openrouter'
+import { findCountry } from '../countries'
 import { SEARCH_RATES, tokenCost } from '../pricing'
 
 // Una «plataforma» es la IA que pregunta un usuario de verdad. Cada adaptador
@@ -163,7 +164,7 @@ async function askViaOpenRouter(p: Platform, prompt: string, ctx: AskContext): P
     // La búsqueda nativa de Grok lee ~100.000 tokens por pregunta (0,19-0,23 $ medidos el
     // 16-10-2026); con Exa son ~0,02 $. PLACTON_GROK_SEARCH=native vuelve a la nativa.
     searchEngine: p.id === 'grok' && env('PLACTON_GROK_SEARCH') !== 'native' ? 'exa' : 'native',
-    country: countryCode(ctx.country),
+    country: countryCode(ctx.country, ctx.language),
     maxOutputTokens: p.id === 'claude' ? 16000 : 4000,
     // ChatGPT razonando a fondo costaba 0,027 $ por respuesta; en «low» responde igual
     // de bien a preguntas de recomendación y cuesta bastante menos.
@@ -181,7 +182,7 @@ async function askChatGPT(p: Platform, prompt: string, ctx: AskContext): Promise
     model: p.model,
     input: prompt,
     webSearch: true,
-    country: countryCode(ctx.country),
+    country: countryCode(ctx.country, ctx.language),
     effort: 'low',
     maxOutputTokens: 2000,
     signal: ctx.signal,
@@ -205,23 +206,9 @@ function anthropic(): Anthropic {
   return anthropicClient
 }
 
-const COUNTRY_CODES: Record<string, string> = {
-  España: 'ES',
-  México: 'MX',
-  Argentina: 'AR',
-  Colombia: 'CO',
-  Chile: 'CL',
-  Perú: 'PE',
-  'Estados Unidos': 'US',
-  'Reino Unido': 'GB',
-  Francia: 'FR',
-  Alemania: 'DE',
-  Italia: 'IT',
-  Portugal: 'PT',
-}
-
-export function countryCode(country: string): string {
-  return COUNTRY_CODES[country] ?? 'ES'
+/** Código ISO del país de las búsquedas; si no está en la lista, el más probable por idioma (nunca España en silencio). */
+export function countryCode(country: string, language = ''): string {
+  return findCountry(country)?.code ?? (language.startsWith('es') ? 'ES' : 'US')
 }
 
 async function askClaude(p: Platform, prompt: string, ctx: AskContext): Promise<AskResult> {
@@ -248,7 +235,7 @@ async function askClaude(p: Platform, prompt: string, ctx: AskContext): Promise<
             type: 'web_search_20260209',
             name: 'web_search',
             max_uses: 4,
-            user_location: { type: 'approximate', country: countryCode(ctx.country) },
+            user_location: { type: 'approximate', country: countryCode(ctx.country, ctx.language) },
           },
         ],
         messages,
@@ -300,20 +287,6 @@ async function askClaude(p: Platform, prompt: string, ctx: AskContext): Promise<
 
 /* ───────────── Google AI Overviews (DataForSEO) ───────────── */
 
-const LOCATION_CODES: Record<string, number> = {
-  ES: 2724,
-  MX: 2484,
-  AR: 2032,
-  CO: 2170,
-  CL: 2152,
-  PE: 2604,
-  US: 2840,
-  GB: 2826,
-  FR: 2250,
-  DE: 2276,
-  IT: 2380,
-  PT: 2620,
-}
 
 interface DfsReference {
   url?: string
@@ -347,7 +320,7 @@ const dfsHeaders = () => ({
 function dfsTask(prompt: string, ctx: AskContext) {
   return {
     keyword: prompt.slice(0, 700),
-    location_code: LOCATION_CODES[countryCode(ctx.country)] ?? 2724,
+    location_code: findCountry(ctx.country)?.google ?? (ctx.language?.startsWith('es') ? 2724 : 2840),
     language_code: ctx.language || 'es',
     device: 'desktop',
     depth: 10,
@@ -481,7 +454,7 @@ async function askPerplexity(p: Platform, prompt: string, ctx: AskContext): Prom
     body: JSON.stringify({
       model: p.model,
       messages: [{ role: 'user', content: prompt }],
-      web_search_options: { user_location: { country: countryCode(ctx.country) } },
+      web_search_options: { user_location: { country: countryCode(ctx.country, ctx.language) } },
     }),
     signal: ctx.signal,
   })

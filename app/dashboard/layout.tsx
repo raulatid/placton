@@ -1,12 +1,12 @@
 import { Shell } from '@/components/panel/Shell'
-import { isAdminEmail, requireCtx } from '@/lib/auth'
+import { canManage, isAdmin, requireCtx } from '@/lib/auth'
 import { getT } from '@/lib/i18n'
 import { unreadInsights } from '@/lib/insights'
 import { planName } from '@/lib/plans'
 import * as repo from '@/lib/repo'
 import { workspaceLogoUrl } from '@/lib/workspaceLogo'
 import { logoutAction } from '../(auth)/actions'
-import { switchWorkspaceAction } from './actions'
+import { newWorkspaceAction, switchWorkspaceAction } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,13 +49,16 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       workspace={{ id: ws.id, name: ws.name, domain: ws.domain, logo: workspaceLogoUrl(ws) }}
       spaces={repo.workspacesOf(user.id).filter((w) => w.onboarded).map((w) => ({ id: w.id, name: w.name, domain: w.domain }))}
       agency={(() => {
+        // «Nuevo cliente» solo para quien administra la agencia.
         const owner = repo.agencyOwnerOf(ws)
-        return owner ? { used: repo.agencyClients(owner.id).length, seats: owner.seats } : null
+        const role = owner ? repo.roleIn(owner.id, user.id) : null
+        return owner && role && canManage(role) ? { used: repo.agencyClients(owner.id).length, seats: owner.seats } : null
       })()}
+      newSpaceAction={newWorkspaceAction}
       canCreateSpace={repo.canCreateWorkspace(user.id)}
       plan={{ ...plan, used, limit }}
       unreadIdeas={unreadInsights(ws.id)}
-      admin={isAdminEmail(user.email)}
+      admin={isAdmin(user)}
       switchAction={switchWorkspaceAction}
       logoutAction={logoutAction}
     >

@@ -1,9 +1,13 @@
 import { Analytics } from '@/components/marketing/Analytics'
+import type { Metadata } from 'next'
 import { Track } from '@/components/marketing/Track'
 import Link from 'next/link'
 import { LangSwitch } from '@/components/LangSwitch'
 import { Logo } from '@/components/Logo'
 import { getT } from '@/lib/i18n'
+
+// Las páginas de acceso no se indexan en Google.
+export const metadata: Metadata = { robots: { index: false, follow: false } }
 
 // Acceso: tarjeta centrada sobre fondo claro, con la navegación de la web
 // arriba y los enlaces del pie debajo.

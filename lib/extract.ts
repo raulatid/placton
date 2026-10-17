@@ -3,6 +3,7 @@ import { structured } from './engines/openai'
 import { tokenCost } from './pricing'
 import { brandKeys, containsKey, key, rootDomain } from './norm'
 import type { Sentiment, TrackedBrand } from './types'
+import { reportError } from './monitor'
 
 // Leer una respuesta y sacar quién sale, en qué orden y cómo se habla de ellos.
 // Dos capas: la IA lee (tono, nombre canónico) y el código decide (identidad y
@@ -98,9 +99,10 @@ export async function extract(
       })
       companies = res.data.companies ?? []
       costUsd = tokenCost(MODEL, res.inputTokens, res.outputTokens)
-    } catch {
+    } catch (err) {
       // Sin matices de la IA seguimos detectando las marcas seguidas contra el
-      // texto: el dato duro nunca se pierde.
+      // texto: el dato duro nunca se pierde. Se avisa (como mucho una vez por hora).
+      reportError(err, 'extracción de menciones')
       companies = []
     }
   }

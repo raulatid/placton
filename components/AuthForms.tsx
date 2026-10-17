@@ -92,7 +92,7 @@ export function RegisterForm({ google, invite, email, web }: { google: boolean; 
           <Link href="/privacy" className="underline">
             {t('privacy policy', 'política de privacidad')}
           </Link>
-          .
+          . {t('Placton is a service for businesses and professionals.', 'Placton es un servicio para empresas y profesionales.')}
         </p>
       </form>
     </>

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { libMessage } from '@/components/panel/format'
+import { urlMessage } from '@/components/panel/format'
 import { AgencyCalculator } from '@/components/AgencyCalculator'
 import { PlanPicker } from '@/components/panel/PlanPicker'
 import { Notice, PageHeader } from '@/components/ui'
@@ -18,11 +18,13 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function PlansPage({ searchParams }: { searchParams: Promise<{ error?: string; cancelado?: string }> }) {
   const sp = await searchParams
-  const { workspace: ws, role } = await requireCtx()
+  const { workspace: ws, role, user } = await requireCtx()
   const { lang, t } = await getT()
   // Un cliente de agencia contrata y cambia a través del espacio que paga.
   const payer = repo.agencyOwnerOf(ws) ?? ws
   const access = repo.accessOf(payer)
+  const payerRole = payer.id === ws.id ? role : repo.roleIn(payer.id, user.id)
+  const canBill = Boolean(payerRole && canManage(payerRole))
   const current = payer.plan !== 'trial' && access.ok ? { plan: payer.plan, interval: payer.billingInterval } : null
   const agencyNow = payer.plan === 'agencia' && access.ok ? { clients: payer.seats, prompts: payer.promptPool } : null
   // Espacio que empezó sin prueba (la web o la persona ya la habían usado): su
@@ -59,7 +61,7 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
       />
       {sp.error && (
         <div className="mb-4">
-          <Notice tone="bad">{sp.error === 'permiso' ? t('Only workspace admins can subscribe.', 'Solo quien administra el espacio puede contratar.') : libMessage(sp.error, lang)}</Notice>
+          <Notice tone="bad">{sp.error === 'permiso' ? t('Only workspace admins can subscribe.', 'Solo quien administra el espacio puede contratar.') : urlMessage(sp.error, lang)}</Notice>
         </div>
       )}
       {sp.cancelado && (
@@ -83,7 +85,7 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
           portalAction={payer.stripeCustomerId ? portalAction : undefined}
           current={current}
           currentLabel={payer.plan === 'trial' ? t('Free trial', 'Prueba gratuita') : planName(payer.plan, lang)}
-          canBuy={canManage(role)}
+          canBuy={canBill}
           usedPrompts={repo.activePromptCount(ws.id)}
         />
       )}
@@ -94,7 +96,7 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
           current={agencyNow}
           usedClients={payer.plan === 'agencia' ? repo.agencyClients(payer.id).length : 1}
           usedPrompts={payer.plan === 'agencia' ? repo.agencyPromptsUsed(payer.id) : repo.activePromptCount(ws.id)}
-          canBuy={canManage(role)}
+          canBuy={canBill}
         />
       </div>
       <p className="mt-6 text-center text-[13px] text-mute">
