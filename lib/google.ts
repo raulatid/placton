@@ -1,5 +1,5 @@
 import 'server-only'
-import { appUrl } from './email'
+import { siteUrl } from './email'
 
 // Acceso con Google (OAuth 2.0, flujo de código). Solo se enseña el botón si
 // están GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET. La URI de retorno que hay que
@@ -10,7 +10,7 @@ export function googleReady(): boolean {
 }
 
 export function googleRedirectUri(): string {
-  return `${appUrl()}/api/auth/google/callback`
+  return `${siteUrl()}/api/auth/google/callback`
 }
 
 export function googleAuthUrl(state: string): string {

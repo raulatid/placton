@@ -11,8 +11,22 @@ export function emailReady(): boolean {
   return Boolean(process.env.RESEND_API_KEY && FROM())
 }
 
+/** Dirección de la aplicación (alta, acceso, panel): https://app.placton.tech en producción. */
 export function appUrl(): string {
+  return (process.env.PLACTON_APP_URL || process.env.PLACTON_URL || 'http://localhost:3490').replace(/\/$/, '')
+}
+
+/** Dirección de la web pública: https://placton.tech en producción. */
+export function siteUrl(): string {
   return (process.env.PLACTON_URL || 'http://localhost:3490').replace(/\/$/, '')
+}
+
+/**
+ * Dominio de las cookies de sesión, idioma y Google (p. ej. «.placton.tech»), para
+ * que valgan a la vez en placton.tech y en app.placton.tech. En local, ninguno.
+ */
+export function cookieDomain(): string | undefined {
+  return process.env.PLACTON_COOKIE_DOMAIN || undefined
 }
 
 function layout(title: string, body: string, cta?: { label: string; url: string }, lang: 'en' | 'es' = 'en'): string {

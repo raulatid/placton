@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { startSession } from '@/lib/auth'
+import { appUrl, cookieDomain } from '@/lib/email'
 import { googleProfile } from '@/lib/google'
 import * as repo from '@/lib/repo'
 
 export async function GET(req: NextRequest) {
-  const fail = () => NextResponse.redirect(new URL('/login?error=google', req.url))
+  // Siempre a la app con su dirección real (dentro del contenedor req.url es localhost:8080).
+  const fail = () => NextResponse.redirect(`${appUrl()}/login?error=google`)
   const raw = req.cookies.get('placton_oauth')?.value
   let saved: { state?: string; invite?: string } = {}
   try {
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
   await startSession(user.id)
 
   const dest = saved.invite ? `/invite/${encodeURIComponent(saved.invite)}` : isNew ? '/onboarding' : '/dashboard'
-  const res = NextResponse.redirect(new URL(dest, req.url))
-  res.cookies.delete('placton_oauth')
+  const res = NextResponse.redirect(`${appUrl()}${dest}`)
+  res.cookies.set('placton_oauth', '', { path: '/', maxAge: 0, domain: cookieDomain() })
   return res
 }

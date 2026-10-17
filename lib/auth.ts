@@ -1,4 +1,5 @@
 import 'server-only'
+import { cookieDomain } from './email'
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { cookies } from 'next/headers'
@@ -56,6 +57,7 @@ export async function startSession(userId: number) {
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     expires,
+    domain: cookieDomain(),
   })
 }
 
@@ -63,6 +65,7 @@ export async function endSession() {
   const store = await cookies()
   const token = store.get(SESSION_COOKIE)?.value
   if (token) run('DELETE FROM sessions WHERE id = ?', [hashToken(token)])
+  store.set(SESSION_COOKIE, '', { path: '/', maxAge: 0, domain: cookieDomain() })
   store.delete(SESSION_COOKIE)
 }
 
