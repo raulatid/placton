@@ -40,8 +40,8 @@ export async function sendContact(_prev: ContactState, formData: FormData): Prom
     return {
       status: 'error',
       message: t(
-        'We could not send your message. Please try again in a moment or write to hola@placton.tech.',
-        'No hemos podido enviar tu mensaje. Inténtalo de nuevo en un momento o escríbenos a hola@placton.tech.',
+        'We could not send your message. Please try again in a moment or write to contact@placton.tech.',
+        'No hemos podido enviar tu mensaje. Inténtalo de nuevo en un momento o escríbenos a contact@placton.tech.',
       ),
     }
   }

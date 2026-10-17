@@ -4,7 +4,7 @@ import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
 import { PLANS, TRIAL_DAYS } from '@/lib/plans'
 
-// PENDIENTE (propietario): sustituir [Razón social] / [Company name], [NIF] y
+// PENDIENTE (propietario): sustituir SELSPY AGENCY S. COOP. / SELSPY AGENCY S. COOP., F75988824 y
 // [Domicilio] / [Registered address] por los datos reales del titular antes de
 // publicar, en las dos versiones.
 
@@ -27,10 +27,10 @@ function TermsEn() {
     <>
           <h2>1. Who we are</h2>
           <p>
-            Placton is a service provided by [Company name], tax ID (NIF) [NIF], with its registered address at [Registered address]
+            Placton is a service provided by SELSPY AGENCY S. COOP., tax ID (NIF) F75988824, with its registered address at [Registered address]
             (&ldquo;Placton&rdquo;, &ldquo;we&rdquo; or &ldquo;us&rdquo;). You can write to us at{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>
             .
           </p>
@@ -130,7 +130,7 @@ function TermsEn() {
 
           <h2>10. Intellectual property</h2>
           <p>
-            The software, design, the Placton brand and the service texts belong to [Company name] or its licensors. For as long as your
+            The software, design, the Placton brand and the service texts belong to SELSPY AGENCY S. COOP. or its licensors. For as long as your
             subscription lasts, we grant you a limited, non-exclusive and non-transferable right to use them.
           </p>
 
@@ -165,15 +165,15 @@ function TermsEn() {
 
           <h2>15. Governing law and jurisdiction</h2>
           <p>
-            These terms are governed by Spanish law. Any dispute will be heard by the courts of the registered address of [Company name],
+            These terms are governed by Spanish law. Any dispute will be heard by the courts of the registered address of SELSPY AGENCY S. COOP.,
             unless you subscribe as a consumer, in which case the courts of your place of residence will have jurisdiction.
           </p>
 
           <h2>16. Contact</h2>
           <p>
             For any question about these terms, write to us at{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>
             .
           </p>
@@ -187,10 +187,10 @@ function TermsEs() {
 
           <h2>1. Quiénes somos</h2>
           <p>
-            Placton es un servicio prestado por [Razón social], con NIF [NIF] y domicilio en [Domicilio] (en adelante, «Placton» o
+            Placton es un servicio prestado por SELSPY AGENCY S. COOP., con NIF F75988824 y domicilio en [Domicilio] (en adelante, «Placton» o
             «nosotros»). Puedes escribirnos a{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>
             .
           </p>
@@ -291,7 +291,7 @@ function TermsEs() {
 
           <h2>10. Propiedad intelectual</h2>
           <p>
-            El software, el diseño, la marca Placton y los textos del servicio pertenecen a [Razón social] o a sus licenciantes. Mientras
+            El software, el diseño, la marca Placton y los textos del servicio pertenecen a SELSPY AGENCY S. COOP. o a sus licenciantes. Mientras
             dure tu suscripción, te concedemos un derecho de uso limitado, no exclusivo e intransferible.
           </p>
 
@@ -327,14 +327,14 @@ function TermsEs() {
           <h2>15. Ley aplicable y jurisdicción</h2>
           <p>
             Estos términos se rigen por la ley española. Para cualquier controversia, las partes se someten a los juzgados y tribunales
-            del domicilio de [Razón social], salvo que contrates como consumidor, en cuyo caso serán competentes los de tu domicilio.
+            del domicilio de SELSPY AGENCY S. COOP., salvo que contrates como consumidor, en cuyo caso serán competentes los de tu domicilio.
           </p>
 
           <h2>16. Contacto</h2>
           <p>
             Para cualquier duda sobre estos términos, escríbenos a{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>
             .
           </p>

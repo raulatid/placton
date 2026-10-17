@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
 
-// PENDIENTE (propietario): sustituir [Razón social] / [Company name], [NIF] y
+// PENDIENTE (propietario): sustituir SELSPY AGENCY S. COOP. / SELSPY AGENCY S. COOP., F75988824 y
 // [Domicilio] / [Registered address] por los datos reales del titular antes de
 // publicar, en las dos versiones.
 
@@ -32,13 +32,13 @@ function PrivacyEn() {
 
           <h2>1. Data controller</h2>
           <ul>
-            <li>Company: [Company name]</li>
-            <li>Tax ID (NIF): [NIF]</li>
+            <li>Company: SELSPY AGENCY S. COOP.</li>
+            <li>Tax ID (NIF): F75988824</li>
             <li>Registered address: [Registered address]</li>
             <li>
               Contact:{' '}
-              <a href="mailto:hola@placton.tech" className={linkClass}>
-                hola@placton.tech
+              <a href="mailto:contact@placton.tech" className={linkClass}>
+                contact@placton.tech
               </a>
             </li>
           </ul>
@@ -101,7 +101,7 @@ function PrivacyEn() {
             <li>Stripe, to process payments and manage subscriptions and invoices.</li>
             <li>Resend, to send the service emails.</li>
             <li>OpenAI, Anthropic, Google (through DataForSEO or the Gemini API), Perplexity and xAI, which process prompts as explained in the previous section. Some of these requests are routed through OpenRouter, which forwards them to the provider.</li>
-            <li>Google's favicon service, which serves the small logos of websites shown in the app and on this site. Your browser requests them directly from Google, which receives your IP address but not the page you are on.</li>
+            <li>Brand logos: our servers download the public icon of each brand's website to show it in the app and on this site. Your browser does not contact any third party for this.</li>
           </ul>
           <p>
             If you choose to sign in with Google, Google provides us with your name and email to identify you. We do not sell your data or
@@ -130,8 +130,8 @@ function PrivacyEn() {
           <p>
             You can exercise your rights of access, rectification, erasure, objection, restriction of processing and portability at any
             time, and withdraw any consent you have given, by writing to{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>{' '}
             from your account email. You can change or delete much of your data yourself from the dashboard.
           </p>
@@ -175,13 +175,13 @@ function PrivacyEs() {
 
           <h2>1. Responsable del tratamiento</h2>
           <ul>
-            <li>Titular: [Razón social]</li>
-            <li>NIF: [NIF]</li>
+            <li>Titular: SELSPY AGENCY S. COOP.</li>
+            <li>NIF: F75988824</li>
             <li>Domicilio: [Domicilio]</li>
             <li>
               Contacto:{' '}
-              <a href="mailto:hola@placton.tech" className={linkClass}>
-                hola@placton.tech
+              <a href="mailto:contact@placton.tech" className={linkClass}>
+                contact@placton.tech
               </a>
             </li>
           </ul>
@@ -247,7 +247,7 @@ function PrivacyEs() {
             <li>Stripe, para procesar los pagos y gestionar las suscripciones y las facturas.</li>
             <li>Resend, para enviar los correos electrónicos del servicio.</li>
             <li>OpenAI, Anthropic, Google (a través de DataForSEO o de la API de Gemini), Perplexity y xAI, que procesan los prompts como se explica en el apartado anterior. Parte de estas peticiones pasan por OpenRouter, que las reenvía al proveedor.</li>
-            <li>El servicio de iconos de Google, que sirve los logotipos pequeños de las webs que se ven en la aplicación y en esta web. Tu navegador los pide directamente a Google, que recibe tu dirección IP pero no la página en la que estás.</li>
+            <li>Logotipos de las marcas: nuestros servidores descargan el icono público de la web de cada marca para enseñarlo en la aplicación y en esta web. Tu navegador no contacta con ningún tercero para esto.</li>
           </ul>
           <p>
             Si eliges entrar con tu cuenta de Google, Google nos facilita tu nombre y tu correo para identificarte. No vendemos tus datos
@@ -276,8 +276,8 @@ function PrivacyEs() {
           <p>
             Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y
             portabilidad, y retirar el consentimiento que hayas dado, escribiendo a{' '}
-            <a href="mailto:hola@placton.tech" className={linkClass}>
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className={linkClass}>
+              contact@placton.tech
             </a>{' '}
             desde el correo de tu cuenta. Muchos de tus datos puedes cambiarlos o borrarlos tú mismo desde el panel.
           </p>

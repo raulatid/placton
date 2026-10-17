@@ -82,8 +82,8 @@ export async function SiteFooter() {
         <div className="flex flex-col gap-4 border-t border-white/10 py-6 text-[13px] text-white/50 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <span>© 2026 Placton</span>
-            <a href="mailto:hola@placton.tech" className="transition-colors hover:text-white">
-              hola@placton.tech
+            <a href="mailto:contact@placton.tech" className="transition-colors hover:text-white">
+              contact@placton.tech
             </a>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
