@@ -48,8 +48,8 @@ export default async function ContactPage({ searchParams }: { searchParams: Prom
               </span>
               <div>
                 <p className="text-[15px] font-bold text-ink">{t('By email', 'Por correo')}</p>
-                <a href="mailto:hola@placton.com" className="text-[15px] text-brand underline-offset-4 hover:underline">
-                  hola@placton.com
+                <a href="mailto:hola@placton.tech" className="text-[15px] text-brand underline-offset-4 hover:underline">
+                  hola@placton.tech
                 </a>
                 <p className="mt-1 text-[13.5px] leading-relaxed text-mute">
                   {t(

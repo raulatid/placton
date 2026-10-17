@@ -37,8 +37,8 @@ function PrivacyEn() {
             <li>Registered address: [Registered address]</li>
             <li>
               Contact:{' '}
-              <a href="mailto:hola@placton.com" className={linkClass}>
-                hola@placton.com
+              <a href="mailto:hola@placton.tech" className={linkClass}>
+                hola@placton.tech
               </a>
             </li>
           </ul>
@@ -130,8 +130,8 @@ function PrivacyEn() {
           <p>
             You can exercise your rights of access, rectification, erasure, objection, restriction of processing and portability at any
             time, and withdraw any consent you have given, by writing to{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>{' '}
             from your account email. You can change or delete much of your data yourself from the dashboard.
           </p>
@@ -180,8 +180,8 @@ function PrivacyEs() {
             <li>Domicilio: [Domicilio]</li>
             <li>
               Contacto:{' '}
-              <a href="mailto:hola@placton.com" className={linkClass}>
-                hola@placton.com
+              <a href="mailto:hola@placton.tech" className={linkClass}>
+                hola@placton.tech
               </a>
             </li>
           </ul>
@@ -276,8 +276,8 @@ function PrivacyEs() {
           <p>
             Puedes ejercer en cualquier momento tus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y
             portabilidad, y retirar el consentimiento que hayas dado, escribiendo a{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>{' '}
             desde el correo de tu cuenta. Muchos de tus datos puedes cambiarlos o borrarlos tú mismo desde el panel.
           </p>

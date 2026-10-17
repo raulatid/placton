@@ -29,8 +29,8 @@ function TermsEn() {
           <p>
             Placton is a service provided by [Company name], tax ID (NIF) [NIF], with its registered address at [Registered address]
             (&ldquo;Placton&rdquo;, &ldquo;we&rdquo; or &ldquo;us&rdquo;). You can write to us at{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>
             .
           </p>
@@ -172,8 +172,8 @@ function TermsEn() {
           <h2>16. Contact</h2>
           <p>
             For any question about these terms, write to us at{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>
             .
           </p>
@@ -189,8 +189,8 @@ function TermsEs() {
           <p>
             Placton es un servicio prestado por [Razón social], con NIF [NIF] y domicilio en [Domicilio] (en adelante, «Placton» o
             «nosotros»). Puedes escribirnos a{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>
             .
           </p>
@@ -333,8 +333,8 @@ function TermsEs() {
           <h2>16. Contacto</h2>
           <p>
             Para cualquier duda sobre estos términos, escríbenos a{' '}
-            <a href="mailto:hola@placton.com" className={linkClass}>
-              hola@placton.com
+            <a href="mailto:hola@placton.tech" className={linkClass}>
+              hola@placton.tech
             </a>
             .
           </p>
