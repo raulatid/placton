@@ -81,8 +81,8 @@ export function FeatureBlocks({ lang }: { lang: Lang }) {
           label={t('Competitors', 'Competidores')}
           lines={lang === 'es' ? ['Mira cómo quedas', 'frente a tus rivales'] : ['Track how you stack', 'up against rivals']}
           text={t(
-            'A daily ranking of visibility and average position for you and your competitors, so you know who the AI picks first and where you are losing ground.',
-            'Un ranking diario de visibilidad y posición media tuyo y de tu competencia, para saber a quién elige primero la IA y dónde estás perdiendo terreno.',
+            'A weekly ranking of visibility and average position for you and your competitors, so you know who the AI picks first and where you are losing ground.',
+            'Un ranking semanal de visibilidad y posición media tuyo y de tu competencia, para saber a quién elige primero la IA y dónde estás perdiendo terreno.',
           )}
         >
           <CompetitorsSnippet lang={lang} />

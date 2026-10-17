@@ -127,7 +127,7 @@ export function Timeline({ days, series }: { days: string[]; series: TimelineSer
             onMouseMove={onMove}
             onMouseLeave={() => setHover(null)}
             role="img"
-            aria-label={t('Daily visibility by brand', 'Evolución diaria de la visibilidad por marca')}
+            aria-label={t('Visibility by brand over time', 'Evolución de la visibilidad por marca')}
           >
             {[0, 0.5, 1].map((f) => (
               <g key={f}>

@@ -133,7 +133,7 @@ export function AgencyCalculator({
               <span className="rounded-full bg-deep px-2.5 py-0.5 text-[11.5px] font-bold text-glow">{t('Multi-brand', 'Varias marcas')}</span>
             </div>
             <p className="mt-1 text-[14px] text-mute">
-              {t('Pick how many client brands you track and how many prompts you want measured every day.', 'Elige cuántas marcas cliente sigues y cuántos prompts quieres medir cada día.')}
+              {t('Pick how many client brands you track and how many prompts you want measured every week.', 'Elige cuántas marcas cliente sigues y cuántos prompts quieres medir cada semana.')}
             </p>
             <ul className="mt-6 space-y-2.5">
               {features.map((f) => (
@@ -185,14 +185,14 @@ export function AgencyCalculator({
               <Stepper value={clients} onChange={setClients} min={AGENCY_MIN} max={AGENCY_MAX} step={1} label={t('Client brands', 'Marcas cliente')} unit={t('clients', 'clientes')} />
             </div>
             <div className="rounded-2xl border border-line bg-white p-4">
-              <div className="mb-3 text-[13px] font-bold text-ink">{t('Prompts tracked daily', 'Prompts medidos al día')}</div>
+              <div className="mb-3 text-[13px] font-bold text-ink">{t('Prompts tracked weekly', 'Prompts medidos por semana')}</div>
               <Stepper
                 value={prompts}
                 onChange={setPrompts}
                 min={AGENCY_PROMPTS_MIN}
                 max={AGENCY_PROMPTS_MAX}
                 step={AGENCY_PROMPTS_STEP}
-                label={t('Prompts tracked daily', 'Prompts medidos al día')}
+                label={t('Prompts tracked weekly', 'Prompts medidos por semana')}
                 unit={t('prompts in total', 'prompts en total')}
               />
               <div className="mt-3 flex flex-wrap gap-1.5">

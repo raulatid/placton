@@ -39,7 +39,7 @@ export interface Workspace {
   seats: number
   /** Plan Agencia: espacio de la agencia que paga este cliente. */
   billingOwnerId: number | null
-  /** Plan Agencia: prompts diarios contratados en total (en el espacio que paga). */
+  /** Plan Agencia: prompts semanales contratados en total (en el espacio que paga). */
   promptPool: number
   createdBy: number | null
   createdAt: string

@@ -34,8 +34,8 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
                 'Tu prueba ha terminado. Tus datos siguen aquí: elige un plan y volvemos a medir mañana mismo.',
               )
             : t(
-                'Every plan includes daily tracking on all platforms, weekly insights and site audits. Change or cancel anytime.',
-                'Todos los planes incluyen seguimiento diario en todas las plataformas, ideas semanales y auditorías. Cambia o cancela cuando quieras.',
+                'Every plan includes weekly tracking on all platforms, weekly insights and site audits. Change or cancel anytime.',
+                'Todos los planes incluyen seguimiento semanal en todas las plataformas, ideas semanales y auditorías. Cambia o cancela cuando quieras.',
               )
         }
       />

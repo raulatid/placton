@@ -28,7 +28,7 @@ export default async function SettingsPage() {
       </Card>
       <div className="space-y-4">
         <Card i={2}>
-          <CardHeader title={t('Platforms', 'Plataformas')} hint={t('Where we ask every day.', 'Dónde preguntamos cada día.')} />
+          <CardHeader title={t('Platforms', 'Plataformas')} hint={t('Where we ask every week.', 'Dónde preguntamos cada semana.')} />
           <div className="px-6 pb-6">
             <EnginesForm all={platforms().map((p) => ({ id: p.id, available: p.available }))} selected={ws.engines} disabled={!manage} />
           </div>

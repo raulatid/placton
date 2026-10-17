@@ -102,7 +102,7 @@ export const AGENCY_PROMPTS_STEP = 25
 /** Cuota mensual por marca cliente (espacio, competidores, informes). */
 export const AGENCY_CLIENT_MONTHLY = 15
 
-/** Precio mensual por prompt medido a diario, por tramos de volumen. */
+/** Precio mensual por prompt medido cada semana, por tramos de volumen. */
 export const AGENCY_PROMPT_TIERS: { upTo: number | null; monthly: number }[] = [
   { upTo: 250, monthly: 1.6 },
   { upTo: 1000, monthly: 1.3 },
@@ -186,7 +186,7 @@ export function planName(id: PlanId, lang: Lang): string {
 }
 
 export const PLAN_FEATURES: Bi[] = [
-  bi('Daily tracking', 'Seguimiento diario'),
+  bi('Weekly tracking', 'Seguimiento semanal'),
   bi('Analytics and personalised insights', 'Analítica e ideas personalizadas'),
   bi('ChatGPT, Claude, Google AI, Perplexity and Grok', 'ChatGPT, Claude, Google AI, Perplexity y Grok'),
   bi('AI-readiness site audits', 'Auditoría de preparación para IA'),

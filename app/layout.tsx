@@ -17,8 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description:
       lang === 'es'
-        ? 'Placton mide cada día qué responden ChatGPT, Claude, Google AI y Perplexity cuando tus clientes preguntan por lo que vendes.'
-        : 'Placton checks every day what ChatGPT, Claude, Google AI and Perplexity answer when your customers ask about what you sell.',
+        ? 'Placton mide cada semana qué responden ChatGPT, Claude, Google AI y Perplexity cuando tus clientes preguntan por lo que vendes.'
+        : 'Placton checks every week what ChatGPT, Claude, Google AI and Perplexity answer when your customers ask about what you sell.',
     icons: { icon: '/icon.svg' },
   }
 }

@@ -83,7 +83,7 @@ export function ToolsMarquee({ lang }: { lang: Lang }) {
     { key: 'insights', label: t('Weekly insights', 'Ideas semanales'), color: '#4a3aa7', Icon: IconIdea },
     { key: 'claude', label: monitoring('claude'), color: PLATFORM_META.claude.color, platform: 'claude' },
     { key: 'indirect', label: t('Indirect mentions', 'Menciones indirectas'), color: '#eb6834', Icon: IconMention },
-    { key: 'history', label: t('Daily history', 'Histórico diario'), color: '#008300', Icon: IconCalendar },
+    { key: 'history', label: t('Weekly history', 'Histórico semanal'), color: '#008300', Icon: IconCalendar },
     { key: 'position', label: t('Average position', 'Posición media'), color: '#e34948', Icon: IconTrend },
   ]
   const rowB: Chip[] = [
@@ -107,8 +107,8 @@ export function ToolsMarquee({ lang }: { lang: Lang }) {
         </h2>
         <p className="max-w-lg text-pretty text-[16px] leading-relaxed text-mute sm:text-[17px] lg:justify-self-end">
           {t(
-            'From the first prompt to the last cited link, Placton keeps the whole picture in one place and updates it every day.',
-            'Desde el primer prompt hasta el último enlace citado, Placton reúne todo en un solo sitio y lo actualiza cada día.',
+            'From the first prompt to the last cited link, Placton keeps the whole picture in one place and updates it every week.',
+            'Desde el primer prompt hasta el último enlace citado, Placton reúne todo en un solo sitio y lo actualiza cada semana.',
           )}
         </p>
       </Container>

@@ -96,8 +96,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <Card i={1}>
           <Empty title={t('No answers in this period yet', 'Todavía no hay respuestas en este periodo')}>
             {t(
-              'The daily check runs on its own every morning. If you just signed up, click “Run now” and your first data will show up here in a few minutes.',
-              'La medición diaria se lanza sola cada mañana. Si acabas de darte de alta, pulsa «Medir ahora» y en unos minutos verás aquí los primeros datos.',
+              'The weekly check runs on its own. If you just signed up, click “Run now” and your first data will show up here in a few minutes.',
+              'La medición semanal se lanza sola. Si acabas de darte de alta, pulsa «Medir ahora» y en unos minutos verás aquí los primeros datos.',
             )}
           </Empty>
         </Card>
@@ -412,7 +412,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             ) : (
               <Card i={8}>
                 <Empty title={t('No searches in this period', 'No hay búsquedas en este periodo')}>
-                  {t('Answers will show up here after the next daily run.', 'Las respuestas aparecerán aquí después de la próxima medición diaria.')}
+                  {t('Answers will show up here after the next weekly run.', 'Las respuestas aparecerán aquí después de la próxima medición semanal.')}
                 </Empty>
               </Card>
             )}

@@ -37,7 +37,7 @@ function TermsEn() {
 
           <h2>2. What Placton is</h2>
           <p>
-            Placton is an online tool that every day sends the questions you set up in your workspace to several AI assistants (ChatGPT,
+            Placton is an online tool that every week sends the questions you set up in your workspace to several AI assistants (ChatGPT,
             Claude, Google AI Overviews and Perplexity, plus any we may add) and analyses their answers: mentions of your brand and your
             competitors, position, tone, cited sources, improvement ideas and a technical audit of your website.
           </p>
@@ -197,7 +197,7 @@ function TermsEs() {
 
           <h2>2. Qué es Placton</h2>
           <p>
-            Placton es una herramienta en línea que envía cada día a distintos asistentes de inteligencia artificial (ChatGPT, Claude,
+            Placton es una herramienta en línea que envía cada semana a distintos asistentes de inteligencia artificial (ChatGPT, Claude,
             Google AI Overviews y Perplexity, además de los que podamos añadir) las preguntas que configuras en tu espacio de trabajo, y
             analiza sus respuestas: menciones de tu marca y de tus competidores, posición, tono, fuentes citadas, ideas de mejora y una
             auditoría técnica de tu web.

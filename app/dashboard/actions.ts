@@ -72,7 +72,7 @@ export async function addPromptAction(_: ActionResult, fd: FormData): Promise<Ac
   const id = repo.addPrompt(workspace.id, text, topic, 'manual')
   if (!id) return { error: t('That prompt is already on the list.', 'Esa pregunta ya está en la lista.') }
   revalidatePath('/dashboard/prompts')
-  return { ok: t('Added. It will be tracked in the next daily run.', 'Añadida. Se medirá en la próxima pasada diaria.') }
+  return { ok: t('Added. It will be tracked in the next weekly run, or right now with “Run now”.', 'Añadida. Se medirá en la próxima medición semanal o ahora mismo con «Medir ahora».') }
 }
 
 export async function togglePromptAction(fd: FormData) {

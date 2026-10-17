@@ -37,8 +37,8 @@ export default async function PromptsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Prompts"
         hint={t(
-          'The questions we ask the AI assistants every day, written the way a customer would. Each one runs on every active platform.',
-          'Las preguntas que hacemos cada día a las IA, escritas como las haría un cliente. Cada una se lanza en todas las plataformas activas.',
+          'The questions we ask the AI assistants every week, written the way a customer would. Each one runs on every active platform.',
+          'Las preguntas que hacemos cada semana a las IA, escritas como las haría un cliente. Cada una se lanza en todas las plataformas activas.',
         )}
         right={<RangePicker current={rangeId} base="/dashboard/prompts" extra={{ tema: sp.tema }} lang={lang} />}
       />

@@ -19,8 +19,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: { absolute: t('Placton · Make AI recommend your brand', 'Placton · Haz que la IA recomiende tu marca') },
     description: t(
-      'Placton asks ChatGPT, Claude, Google AI and Perplexity what your customers ask, every day, and shows who appears, in what position and why. 7-day free trial, no card required.',
-      'Placton pregunta cada día a ChatGPT, Claude, Google AI y Perplexity lo mismo que tus clientes y te enseña quién aparece, en qué puesto y por qué. Prueba 7 días gratis, sin tarjeta.',
+      'Placton asks ChatGPT, Claude, Google AI and Perplexity what your customers ask, every week, and shows who appears, in what position and why. 7-day free trial, no card required.',
+      'Placton pregunta cada semana a ChatGPT, Claude, Google AI y Perplexity lo mismo que tus clientes y te enseña quién aparece, en qué puesto y por qué. Prueba 7 días gratis, sin tarjeta.',
     ),
     alternates: { canonical: '/' },
   }
@@ -78,8 +78,8 @@ export default async function HomePage() {
               style={{ '--i': 1, textShadow: '0 1px 14px rgba(4, 25, 28, 0.35)' } as React.CSSProperties}
             >
               {t(
-                'Every day, Placton asks the leading AI assistants the questions your customers ask, and shows you who appears, where and why.',
-                'Cada día, Placton hace a los principales asistentes de IA las preguntas de tus clientes y te enseña quién aparece, en qué puesto y por qué.',
+                'Every week, Placton asks the leading AI assistants the questions your customers ask, and shows you who appears, where and why.',
+                'Cada semana, Placton hace a los principales asistentes de IA las preguntas de tus clientes y te enseña quién aparece, en qué puesto y por qué.',
               )}
             </p>
             <div className="anim-rise mt-10 flex flex-col items-center gap-3.5" style={{ '--i': 2 } as React.CSSProperties}>

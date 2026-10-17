@@ -335,8 +335,8 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
               loadingPrompts
                 ? t('We are writing the questions your customers ask AI…', 'Estamos escribiendo las preguntas que tus clientes hacen a la IA…')
                 : t(
-                    "We'll ask every AI platform these questions each day to compare you with your competitors.",
-                    'Haremos estas preguntas cada día a todas las IA para compararte con tu competencia.',
+                    "We'll ask every AI platform these questions every week to compare you with your competitors.",
+                    'Haremos estas preguntas cada semana a todas las IA para compararte con tu competencia.',
                   )
             }
           />

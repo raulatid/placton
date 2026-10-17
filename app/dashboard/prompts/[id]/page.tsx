@@ -99,7 +99,7 @@ export default async function PromptDetail({ params, searchParams }: { params: P
       ) : (
         <Card i={6}>
           <Empty title={t('No answers in this period', 'Sin respuestas en este periodo')}>
-            {t('This prompt will be tracked in the next daily run.', 'Esta pregunta se medirá en la próxima pasada diaria.')}
+            {t('This prompt will be tracked in the next weekly run, or right now with “Run now”.', 'Esta pregunta se medirá en la próxima medición semanal o ahora mismo con «Medir ahora».')}
           </Empty>
         </Card>
       )}

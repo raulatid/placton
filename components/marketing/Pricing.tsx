@@ -44,10 +44,10 @@ function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
     t('Dashboards and weekly insights', 'Paneles e ideas cada semana'),
     tx(
       <>
-        Fresh answers <b className="font-bold text-ink">every day</b>
+        Fresh answers <b className="font-bold text-ink">every week</b>
       </>,
       <>
-        Respuestas nuevas <b className="font-bold text-ink">cada día</b>
+        Respuestas nuevas <b className="font-bold text-ink">cada semana</b>
       </>,
     ),
     <span key="ai" className="block">
@@ -88,7 +88,7 @@ function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
         {planName(id, lang)}
         {plan.highlight && <span className="sr-only">{t('(recommended)', '(recomendado)')}</span>}
       </h3>
-      <p className="mt-1 text-[14px] text-mute">{t(`Monitor ${plan.prompts} prompts daily`, `Sigue ${plan.prompts} prompts cada día`)}</p>
+      <p className="mt-1 text-[14px] text-mute">{t(`Monitor ${plan.prompts} prompts weekly`, `Sigue ${plan.prompts} prompts cada semana`)}</p>
 
       <p className="mt-6 flex flex-wrap items-baseline gap-x-1.5">
         <span className="num text-[38px] font-bold leading-none tracking-[-0.04em] text-ink">{money(monthlyEquivalent(id, period), lang)}</span>

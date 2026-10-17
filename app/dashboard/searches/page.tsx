@@ -77,7 +77,7 @@ export default async function SearchesPage({ searchParams }: { searchParams: Pro
       ) : (
         <Card i={2}>
           <Empty title={t('No answers match these filters', 'No hay respuestas con estos filtros')}>
-            {t('Change the period or wait for the next daily run.', 'Cambia el periodo o espera a la próxima medición diaria.')}
+            {t('Change the period or wait for the next weekly run.', 'Cambia el periodo o espera a la próxima medición semanal.')}
           </Empty>
         </Card>
       )}

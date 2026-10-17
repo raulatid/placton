@@ -54,7 +54,7 @@ export async function ensurePrice(plan: PaidPlanId, interval: Interval): Promise
     product = await s.products.create({
       id: productId,
       name: `Placton ${PLANS[plan].name}`,
-      description: plan === 'agencia' ? 'Per client brand tracked' : `${PLANS[plan].prompts} prompts tracked daily`,
+      description: plan === 'agencia' ? 'Per client brand tracked' : `${PLANS[plan].prompts} prompts tracked weekly`,
       metadata: { plan },
     })
   }
@@ -72,7 +72,7 @@ export async function ensurePrice(plan: PaidPlanId, interval: Interval): Promise
   return price.id
 }
 
-/** Agencia: precio por prompt medido a diario, con tramos de volumen. */
+/** Agencia: precio por prompt medido cada semana, con tramos de volumen. */
 export async function ensureAgencyPromptPrice(interval: Interval): Promise<string> {
   const lk = `placton_agencia_prompts_${interval}_${CURRENCY}`
   const cached = priceCache.get(lk)
@@ -88,7 +88,7 @@ export async function ensureAgencyPromptPrice(interval: Interval): Promise<strin
   try {
     product = await s.products.retrieve(productId)
   } catch {
-    product = await s.products.create({ id: productId, name: 'Placton Agency prompts', description: 'Prompts tracked daily, shared across client brands', metadata: { plan: 'agencia' } })
+    product = await s.products.create({ id: productId, name: 'Placton Agency prompts', description: 'Prompts tracked weekly, shared across client brands', metadata: { plan: 'agencia' } })
   }
   const yearly = (m: number) => Math.round(m * 12 * (1 - YEARLY_DISCOUNT) * 100)
   const price = await s.prices.create({

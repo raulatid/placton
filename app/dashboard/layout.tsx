@@ -36,7 +36,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   } else {
     plan = {
       label: planLabel,
-      detail: ws.cancelAtPeriodEnd ? t('Cancels at the end of the period', 'Se cancela al final del periodo') : t('Daily tracking active', 'Seguimiento diario activo'),
+      detail: ws.cancelAtPeriodEnd ? t('Cancels at the end of the period', 'Se cancela al final del periodo') : t('Weekly tracking active', 'Seguimiento semanal activo'),
       cta: ws.plan === 'escala' ? null : t('Upgrade plan', 'Mejorar plan'),
       warn: ws.cancelAtPeriodEnd,
     }

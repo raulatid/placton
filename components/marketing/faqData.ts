@@ -35,8 +35,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
             'Te registras y añades tu web. A partir de ella te proponemos competidores y las preguntas (prompts) que suelen hacer tus clientes. Revisas la lista, quitas o añades lo que quieras y confirmas.',
           ),
           bi(
-            'From then on Placton sends those prompts to the AI platforms every day, stores each answer and analyses it: whether you appear, in what position, with what tone, next to whom and with which sources. You see all of it in your dashboard.',
-            'Desde ese momento Placton lanza esos prompts cada día a las plataformas de IA, guarda cada respuesta y la analiza: si apareces, en qué puesto, con qué tono, junto a quién y con qué fuentes. Todo eso lo ves en tu panel.',
+            'From then on Placton sends those prompts to the AI platforms every week, stores each answer and analyses it: whether you appear, in what position, with what tone, next to whom and with which sources. You see all of it in your dashboard.',
+            'Desde ese momento Placton lanza esos prompts cada semana a las plataformas de IA, guarda cada respuesta y la analiza: si apareces, en qué puesto, con qué tono, junto a quién y con qué fuentes. Todo eso lo ves en tu panel.',
           ),
         ],
       },
@@ -59,8 +59,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: bi('What is a prompt?', '¿Qué es un prompt?'),
         a: [
           bi(
-            'A prompt is a question we ask the AI platforms on your behalf, such as "best accounting software for freelancers" or "where to buy sourdough in Madrid". Each prompt is asked on every platform, every day.',
-            'Un prompt es una pregunta que hacemos a las plataformas de IA en tu nombre, por ejemplo «mejor programa de contabilidad para autónomos» o «dónde comprar pan de masa madre en Madrid». Cada prompt se lanza en todas las plataformas, todos los días.',
+            'A prompt is a question we ask the AI platforms on your behalf, such as "best accounting software for freelancers" or "where to buy sourdough in Madrid". Each prompt is asked on every platform, every week.',
+            'Un prompt es una pregunta que hacemos a las plataformas de IA en tu nombre, por ejemplo «mejor programa de contabilidad para autónomos» o «dónde comprar pan de masa madre en Madrid». Cada prompt se lanza en todas las plataformas, cada semana.',
           ),
           bi(
             'Your plan sets how many prompts you can track at once. You can change them whenever you like.',
@@ -111,8 +111,8 @@ export const FAQ_GROUPS: FaqGroup[] = [
         q: bi('How often is the data updated?', '¿Cada cuánto se actualizan los datos?'),
         a: [
           bi(
-            'Every day. Each prompt is asked daily on every platform in your workspace, so your dashboard gets fresh answers every day.',
-            'Cada día. Cada prompt se lanza a diario en todas las plataformas de tu espacio, así que tu panel suma respuestas nuevas todos los días.',
+            'Every week. Each prompt is asked once a week on every platform in your workspace, with each AI searching the web just like it does for a real user. New prompts can be measured right away with “Run now”.',
+            'Cada semana. Cada prompt se lanza una vez por semana en todas las plataformas de tu espacio, con cada IA buscando en internet igual que lo hace para una persona. Los prompts nuevos puedes medirlos al momento con «Medir ahora».',
           ),
           bi(
             'AI answers change from one day to the next, which is why the trend over several weeks matters more than any single answer.',
