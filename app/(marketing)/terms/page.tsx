@@ -4,8 +4,7 @@ import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
 import { PLANS, TRIAL_DAYS } from '@/lib/plans'
 
-// Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A.
-// Falta el código postal y la localidad del domicilio (en las dos versiones).
+// Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A, 30007 Murcia.
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -26,7 +25,7 @@ function TermsEn() {
     <>
           <h2>1. Who we are</h2>
           <p>
-            Placton is a service provided by SELSPY AGENCY S. COOP., tax ID (NIF) F75988824, with its registered address at Paseo la Fuente 9, 4.º A
+            Placton is a service provided by SELSPY AGENCY S. COOP., tax ID (NIF) F75988824, with its registered address at Paseo la Fuente 9, 4.º A, 30007 Murcia (Spain)
             (&ldquo;Placton&rdquo;, &ldquo;we&rdquo; or &ldquo;us&rdquo;). You can write to us at{' '}
             <a href="mailto:contact@placton.tech" className={linkClass}>
               contact@placton.tech
@@ -186,7 +185,7 @@ function TermsEs() {
 
           <h2>1. Quiénes somos</h2>
           <p>
-            Placton es un servicio prestado por SELSPY AGENCY S. COOP., con NIF F75988824 y domicilio en Paseo la Fuente n.º 9, 4.º A (en adelante, «Placton» o
+            Placton es un servicio prestado por SELSPY AGENCY S. COOP., con NIF F75988824 y domicilio en Paseo la Fuente n.º 9, 4.º A, 30007 Murcia (en adelante, «Placton» o
             «nosotros»). Puedes escribirnos a{' '}
             <a href="mailto:contact@placton.tech" className={linkClass}>
               contact@placton.tech

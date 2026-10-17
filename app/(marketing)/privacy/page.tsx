@@ -2,8 +2,7 @@ import type { Metadata } from 'next'
 import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
 
-// Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A.
-// Falta el código postal y la localidad del domicilio (en las dos versiones).
+// Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A, 30007 Murcia.
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -33,7 +32,7 @@ function PrivacyEn() {
           <ul>
             <li>Company: SELSPY AGENCY S. COOP.</li>
             <li>Tax ID (NIF): F75988824</li>
-            <li>Registered address: Paseo la Fuente 9, 4.º A</li>
+            <li>Registered address: Paseo la Fuente 9, 4.º A, 30007 Murcia (Spain)</li>
             <li>
               Contact:{' '}
               <a href="mailto:contact@placton.tech" className={linkClass}>
@@ -176,7 +175,7 @@ function PrivacyEs() {
           <ul>
             <li>Titular: SELSPY AGENCY S. COOP.</li>
             <li>NIF: F75988824</li>
-            <li>Domicilio: Paseo la Fuente n.º 9, 4.º A</li>
+            <li>Domicilio: Paseo la Fuente n.º 9, 4.º A, 30007 Murcia</li>
             <li>
               Contacto:{' '}
               <a href="mailto:contact@placton.tech" className={linkClass}>
