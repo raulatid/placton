@@ -1,0 +1,469 @@
+@import "tailwindcss";
+
+/* Placton: tinta oceánica, verde plancton y mucho aire. Poco color en la
+   interfaz; el color se reserva para los datos. */
+@theme {
+  --color-ink: #0b1d21;
+  --color-ink-2: #31464b;
+  --color-mute: #66797d;
+  --color-faint: #93a3a6;
+  --color-line: #e2e9e7;
+  --color-line-2: #eef3f1;
+  --color-bg: #f5f8f7;
+  --color-card: #ffffff;
+  --color-deep: #04191c;
+  --color-deep-2: #0a2b2e;
+  --color-brand: #0b6b62;
+  --color-brand-2: #00a38c;
+  --color-glow: #6ef0d2;
+  --color-soft: #e5f6f2;
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e3;
+  --color-bad: #c2410c;
+  --color-bad-soft: #fdece6;
+  --color-good: #047857;
+  --color-good-soft: #e3f6ee;
+
+  /* Paleta categórica validada (orden fijo; el color sigue a la marca). */
+  --color-s1: #00a38c;
+  --color-s2: #eb6834;
+  --color-s3: #2a78d6;
+  --color-s4: #eda100;
+  --color-s5: #e87ba4;
+  --color-s6: #008300;
+  --color-s7: #4a3aa7;
+  --color-s8: #e34948;
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--color-glow);
+  color: var(--color-deep);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* En la capa de componentes para que las utilidades de Tailwind (bordes de
+   aviso, anillos) puedan cambiarla en una tarjeta concreta. */
+@layer components {
+  .card {
+    background: var(--color-card);
+    border: 1px solid var(--color-line);
+    border-radius: 16px;
+  }
+}
+
+/* Fondo del océano: partículas quietas, sin efectos al hacer scroll. */
+.ocean {
+  background-color: var(--color-deep);
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, rgba(110, 240, 210, 0.75), transparent 60%),
+    radial-gradient(1.5px 1.5px at 28% 68%, rgba(110, 240, 210, 0.55), transparent 60%),
+    radial-gradient(1px 1px at 44% 14%, rgba(255, 255, 255, 0.5), transparent 60%),
+    radial-gradient(1.5px 1.5px at 61% 47%, rgba(110, 240, 210, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 73% 81%, rgba(255, 255, 255, 0.45), transparent 60%),
+    radial-gradient(1.5px 1.5px at 86% 29%, rgba(110, 240, 210, 0.6), transparent 60%),
+    radial-gradient(1px 1px at 93% 62%, rgba(255, 255, 255, 0.4), transparent 60%),
+    radial-gradient(1px 1px at 7% 84%, rgba(110, 240, 210, 0.5), transparent 60%),
+    radial-gradient(1px 1px at 37% 91%, rgba(255, 255, 255, 0.35), transparent 60%),
+    radial-gradient(1.5px 1.5px at 52% 76%, rgba(110, 240, 210, 0.45), transparent 60%),
+    radial-gradient(900px 520px at 50% -10%, rgba(0, 163, 140, 0.28), transparent 65%),
+    radial-gradient(700px 400px at 100% 100%, rgba(42, 120, 214, 0.12), transparent 60%);
+  background-size: 320px 320px, 380px 380px, 300px 300px, 420px 420px, 360px 360px, 340px 340px, 400px 400px, 310px 310px, 450px 450px, 390px 390px, 100% 100%, 100% 100%;
+}
+
+.ring-focus:focus-visible,
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-brand-2);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+details > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose-answer p {
+  margin: 0 0 0.7em;
+}
+.prose-answer ul,
+.prose-answer ol {
+  margin: 0 0 0.7em 1.2em;
+}
+.prose-answer ul {
+  list-style: disc;
+}
+.prose-answer ol {
+  list-style: decimal;
+}
+.prose-answer li {
+  margin: 0.15em 0;
+}
+.prose-answer h3,
+.prose-answer h4 {
+  font-weight: 700;
+  margin: 0.9em 0 0.4em;
+}
+.prose-answer mark {
+  background: #c9f5ea;
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.prose-answer mark.rival {
+  background: #fde3d6;
+}
+
+.legal h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 2rem 0 0.6rem;
+}
+.legal p,
+.legal li {
+  color: var(--color-ink-2);
+  line-height: 1.7;
+  margin-bottom: 0.7rem;
+}
+.legal ul {
+  list-style: disc;
+  padding-left: 1.2rem;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* ───────────── Movimiento (común a web, alta y panel) ─────────────
+   Animaciones cortas que siempre terminan en el estado final (fill: both).
+   Con «reducir movimiento» del sistema, todo aparece directamente. */
+
+@keyframes p-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes p-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes p-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes p-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes p-draw {
+  from {
+    stroke-dashoffset: var(--len, 1200);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes p-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes p-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes p-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+@keyframes p-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 163, 140, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(0, 163, 140, 0);
+  }
+}
+
+/* Aparece subiendo; --i escalona (0, 1, 2…) */
+.anim-rise {
+  animation: p-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+.anim-fade {
+  animation: p-fade 0.5s ease both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+/* Barras que crecen desde la base o desde la izquierda */
+.anim-grow-y {
+  transform-origin: bottom;
+  animation: p-grow-y 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(120ms + var(--i, 0) * 60ms);
+}
+.anim-grow-x {
+  transform-origin: left;
+  animation: p-grow-x 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(120ms + var(--i, 0) * 60ms);
+}
+/* Líneas SVG que se dibujan (poner pathLength="1200" en el path) */
+.anim-draw {
+  stroke-dasharray: var(--len, 1200);
+  animation: p-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(150ms + var(--i, 0) * 80ms);
+}
+/* Esqueleto de carga con brillo */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef3f1 25%, #f8fbfa 37%, #eef3f1 63%);
+  background-size: 400% 100%;
+  animation: p-shimmer 1.4s ease infinite;
+}
+/* Texto con brillo para estados «pensando…» */
+.shimmer-text {
+  background: linear-gradient(90deg, #93a3a6 0%, #93a3a6 40%, #e6efed 50%, #93a3a6 60%, #93a3a6 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: p-shimmer 2s linear infinite;
+}
+.spin {
+  animation: p-spin 0.9s linear infinite;
+}
+.live-dot {
+  animation: p-glow 1.8s ease-in-out infinite;
+}
+.indeterminate {
+  position: relative;
+  overflow: hidden;
+}
+.indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: p-indeterminate 1.4s ease-in-out infinite;
+}
+/* Tarjeta con más relieve al pasar por encima */
+.lift {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px -24px rgba(4, 25, 28, 0.35);
+}
+
+/* Degradado marino de Placton para fondos claros (web y alta) */
+.sea-fade {
+  background:
+    linear-gradient(to bottom, transparent 0%, transparent 55%, rgba(110, 240, 210, 0.22) 78%, rgba(42, 120, 214, 0.38) 100%),
+    #f2f4f3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-rise,
+  .anim-fade,
+  .anim-grow-y,
+  .anim-grow-x,
+  .anim-draw,
+  .skeleton,
+  .shimmer-text,
+  .spin,
+  .live-dot,
+  .indeterminate::after {
+    animation: none !important;
+  }
+  .shimmer-text {
+    color: #93a3a6;
+  }
+}
+
+/* Deslizador del plan Agencia */
+.agency-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+.agency-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid #00a38c;
+  box-shadow: 0 4px 12px -4px rgba(4, 25, 28, 0.4);
+  transition: transform 0.15s ease;
+}
+.agency-range::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
+}
+.agency-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid #00a38c;
+  box-shadow: 0 4px 12px -4px rgba(4, 25, 28, 0.4);
+}
+
+/* ───────────── Panel: cristal sobre degradado ─────────────
+   Las tarjetas dejan ver un poco el degradado marino de arriba, con un borde
+   que va de blanco (luz) a gris (sombra) para que parezcan de vidrio. */
+@layer components {
+.panel .card {
+  border: 1px solid transparent;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), #ffffff 140px) padding-box,
+    linear-gradient(180deg, #ffffff, rgba(214, 225, 222, 0.95) 40%, #dfe5e2) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(4, 25, 28, 0.04),
+    0 16px 36px -28px rgba(4, 25, 28, 0.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+
+/* Botones y selectores claros de la cabecera, también de vidrio */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 1px 2px rgba(4, 25, 28, 0.05),
+    0 8px 20px -14px rgba(4, 25, 28, 0.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+}
+}
+
+/* Título con un degradado de tinta a verde mar */
+.ink-gradient {
+  background: linear-gradient(100deg, #0b1d21 0%, #0b1d21 55%, #0b6b62 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Brillo que recorre las barras al aparecer */
+@keyframes p-sheen {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: p-sheen 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ───────────── Fondo marino de la portada ───────────── */
+@keyframes p-ray-sway {
+  0%,
+  100% {
+    transform: translateX(-12px);
+    opacity: var(--ray-o, 1);
+  }
+  50% {
+    transform: translateX(12px);
+    opacity: calc(var(--ray-o, 1) * 0.6);
+  }
+}
+.sea-ray {
+  animation: p-ray-sway 16s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sea-ray {
+    animation: none;
+  }
+}
