@@ -6,7 +6,9 @@ import { domainKey } from './norm'
 // prepara. La medición vive en engines + extract y no se contamina con esto.
 
 const SMART = process.env.PLACTON_SMART_MODEL || 'gpt-5.6-sol'
-const FAST = process.env.PLACTON_FAST_MODEL || 'gpt-5.4-mini'
+// Luna: con búsqueda en internet cumple el «Zero Data Retention» de la cuenta de
+// OpenRouter (gpt-5.4-mini con búsqueda no, y el onboarding fallaba en producción).
+const FAST = process.env.PLACTON_FAST_MODEL || 'gpt-5.6-luna'
 
 export interface SitePeek {
   url: string

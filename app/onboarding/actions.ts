@@ -1,6 +1,7 @@
 'use server'
 
 import { trialAlreadyUsed } from '@/lib/abuse'
+import { reportError } from '@/lib/monitor'
 import { analyzeBrand, peekSite, suggestPrompts, type BrandProfile, type SuggestedPrompt } from '@/lib/ai'
 import { requireUser } from '@/lib/auth'
 import { availablePlatformIds } from '@/lib/engines'
@@ -58,6 +59,7 @@ export async function analyzeAction(rawUrl: string): Promise<{ profile: BrandPro
     return { profile, domain }
   } catch (err) {
     console.error('[placton] analizar marca', err)
+    reportError(err, 'onboarding: analizar la web')
     return {
       profile: { ...fallback, brandName: site.title.split(/[|·:–-]/)[0].trim() || fallback.brandName },
       domain,
