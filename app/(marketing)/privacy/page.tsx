@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import { Container } from '@/components/marketing/parts'
 import { getT } from '@/lib/i18n'
 
-// PENDIENTE (propietario): sustituir SELSPY AGENCY S. COOP. / SELSPY AGENCY S. COOP., F75988824 y
-// [Domicilio] / [Registered address] por los datos reales del titular antes de
-// publicar, en las dos versiones.
+// Titular: SELSPY AGENCY S. COOP. (NIF F75988824), Paseo la Fuente n.º 9, 4.º A.
+// Falta el código postal y la localidad del domicilio (en las dos versiones).
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -34,7 +33,7 @@ function PrivacyEn() {
           <ul>
             <li>Company: SELSPY AGENCY S. COOP.</li>
             <li>Tax ID (NIF): F75988824</li>
-            <li>Registered address: [Registered address]</li>
+            <li>Registered address: Paseo la Fuente 9, 4.º A</li>
             <li>
               Contact:{' '}
               <a href="mailto:contact@placton.tech" className={linkClass}>
@@ -177,7 +176,7 @@ function PrivacyEs() {
           <ul>
             <li>Titular: SELSPY AGENCY S. COOP.</li>
             <li>NIF: F75988824</li>
-            <li>Domicilio: [Domicilio]</li>
+            <li>Domicilio: Paseo la Fuente n.º 9, 4.º A</li>
             <li>
               Contacto:{' '}
               <a href="mailto:contact@placton.tech" className={linkClass}>
