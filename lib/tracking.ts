@@ -1,5 +1,5 @@
 import 'server-only'
-import { all, nowIso, one, run, today } from './db'
+import { addDays, all, nowIso, one, run, today } from './db'
 import { ask, enginesFor, platformById, type Platform } from './engines'
 import { extract } from './extract'
 import { refreshInsights } from './insights'
@@ -47,15 +47,25 @@ interface Cell {
 }
 
 /** Celdas del día que aún no tienen respuesta válida. */
+/**
+ * Cada cuántos días se mide cada prompt en cada plataforma (7 = semanal). Con
+ * búsqueda real en internet cada respuesta cuesta ~0,01 $; medir a diario hundía
+ * el margen. «Medir ahora» solo mide lo que aún no tenga dato en esta ventana.
+ */
+export const MEASURE_EVERY_DAYS = Math.max(1, Number(process.env.PLACTON_MEASURE_DAYS) || 7)
+
 function pendingCells(ws: Workspace, day: string): Cell[] {
   const prompts = repo.promptsOf(ws.id, true).slice(0, repo.promptLimit(ws))
   const engines = enginesFor(ws.engines)
     .map((id) => platformById(id))
     .filter((p): p is Platform => Boolean(p?.available))
+  const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
   const done = new Set(
-    all<{ promptId: number; engine: string }>('SELECT promptId, engine FROM answers WHERE workspaceId = ? AND day = ? AND error IS NULL', [ws.id, day]).map(
-      (r) => `${r.promptId}:${r.engine}`,
-    ),
+    all<{ promptId: number; engine: string }>('SELECT promptId, engine FROM answers WHERE workspaceId = ? AND day BETWEEN ? AND ? AND error IS NULL', [
+      ws.id,
+      since,
+      day,
+    ]).map((r) => `${r.promptId}:${r.engine}`),
   )
   const cells: Cell[] = []
   for (const prompt of prompts) for (const platform of engines) if (!done.has(`${prompt.id}:${platform.id}`)) cells.push({ prompt, platform })
@@ -77,7 +87,7 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
   const cells = pendingCells(ws, day)
   if (!cells.length) {
     const noPrompts = repo.activePromptCount(ws.id) === 0
-    return { runId: null, reason: noPrompts ? 'No hay prompts activos' : 'Hoy ya está todo medido' }
+    return { runId: null, reason: noPrompts ? 'No hay prompts activos' : 'Esta semana ya está todo medido' }
   }
 
   const { id: runId } = run('INSERT INTO runs (workspaceId, day, trigger, status, total, startedAt, heartbeatAt) VALUES (?, ?, ?, ?, ?, ?, ?)', [
@@ -89,11 +99,11 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
     nowIso(),
     nowIso(),
   ])
-  void execute(ws, runId, day, cells)
+  void execute(ws, runId, day, cells, trigger)
   return { runId }
 }
 
-async function execute(ws: Workspace, runId: number, day: string, cells: Cell[]) {
+async function execute(ws: Workspace, runId: number, day: string, cells: Cell[], trigger: Run['trigger']) {
   const brands = repo.trackedBrands(ws)
   let done = 0
   let costUsd = 0
@@ -154,7 +164,9 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[])
   try {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, cells.length) }, worker))
     run("UPDATE runs SET status = 'ok', error = NULL, finishedAt = ?, costUsd = ? WHERE id = ?", [nowIso(), costUsd, runId])
-    repo.updateWorkspace(ws.id, { lastTrackedDay: day })
+    // Solo las mediciones completas (alta y semanal) marcan el ciclo; «Medir ahora»
+    // mide prompts nuevos y no debe retrasar la medición de la semana.
+    if (trigger !== 'manual') repo.updateWorkspace(ws.id, { lastTrackedDay: day })
     try {
       refreshInsights(repo.workspaceById(ws.id)!)
     } catch (err) {
@@ -176,7 +188,9 @@ export async function runDaily(): Promise<{ started: number[]; skipped: number }
   const started: number[] = []
   let skipped = 0
   for (const ws of repo.allWorkspaces()) {
-    if (!ws.onboarded || !repo.accessOf(ws).ok || ws.lastTrackedDay === day) {
+    // Una medición completa por ventana (semanal): se espera a que pasen los días.
+    const recent = ws.lastTrackedDay && ws.lastTrackedDay > addDays(day, -MEASURE_EVERY_DAYS)
+    if (!ws.onboarded || !repo.accessOf(ws).ok || recent) {
       skipped++
       continue
     }

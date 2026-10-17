@@ -11,7 +11,7 @@ import type { Sentiment, TrackedBrand } from './types'
 // Directa = la respuesta nombra a la marca.
 // Indirecta = no la nombra, pero cita como fuente una página de su dominio.
 
-const MODEL = process.env.PLACTON_EXTRACT_MODEL || 'gpt-5.4-mini'
+const MODEL = process.env.PLACTON_EXTRACT_MODEL || 'gpt-5.6-luna'
 
 const SCHEMA = {
   type: 'object',

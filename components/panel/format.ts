@@ -28,7 +28,7 @@ const LIB_EN: Record<string, string> = {
   'Espacio no encontrado': 'Workspace not found',
   'La suscripción no está activa': 'The subscription is not active',
   'No hay prompts activos': 'There are no active prompts',
-  'Hoy ya está todo medido': 'Everything has already been tracked today',
+  'Esta semana ya está todo medido': 'Everything has already been tracked this week',
   'La contraseña necesita al menos 8 caracteres.': 'Your password needs at least 8 characters.',
   'La contraseña es demasiado larga.': 'That password is too long.',
 }

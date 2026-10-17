@@ -45,11 +45,11 @@ const env = (k: string) => (process.env[k] ?? '').trim()
 
 // Modelos en OpenRouter (slug «proveedor/modelo»). Configurables por entorno.
 const OR_MODELS = {
-  chatgpt: () => env('PLACTON_OR_CHATGPT_MODEL') || 'openai/gpt-5.4-mini',
-  claude: () => env('PLACTON_OR_CLAUDE_MODEL') || 'anthropic/claude-opus-5.5',
+  chatgpt: () => env('PLACTON_OR_CHATGPT_MODEL') || 'openai/gpt-5.6-luna',
+  claude: () => env('PLACTON_OR_CLAUDE_MODEL') || 'anthropic/claude-haiku-5.5',
   google: () => env('PLACTON_OR_GEMINI_MODEL') || 'google/gemini-2.5-flash',
   perplexity: () => env('PLACTON_OR_PERPLEXITY_MODEL') || 'perplexity/sonar',
-  grok: () => env('PLACTON_OR_GROK_MODEL') || 'x-ai/grok-4.7',
+  grok: () => env('PLACTON_OR_GROK_MODEL') || 'x-ai/grok-4.3',
 }
 
 /** PLACTON_PROVIDER=openrouter fuerza a pasar todo por OpenRouter. */
@@ -69,7 +69,7 @@ export function platforms(): Platform[] {
       name: 'ChatGPT',
       short: 'GPT',
       color: '#10a37f',
-      model: openaiDirect ? env('PLACTON_CHATGPT_MODEL') || 'gpt-5.4-mini' : OR_MODELS.chatgpt(),
+      model: openaiDirect ? env('PLACTON_CHATGPT_MODEL') || 'gpt-5.6-luna' : OR_MODELS.chatgpt(),
       via: openaiDirect ? 'directo' : 'openrouter',
       available: openaiDirect || or,
       missing: 'OPENAI_API_KEY u OPENROUTER_API_KEY',
@@ -79,7 +79,7 @@ export function platforms(): Platform[] {
       name: 'Claude',
       short: 'Cl',
       color: '#d97757',
-      model: anthropicDirect ? env('PLACTON_CLAUDE_MODEL') || 'claude-opus-5-5' : OR_MODELS.claude(),
+      model: anthropicDirect ? env('PLACTON_CLAUDE_MODEL') || 'claude-haiku-5-5' : OR_MODELS.claude(),
       via: anthropicDirect ? 'directo' : 'openrouter',
       available: anthropicDirect || or,
       missing: 'ANTHROPIC_API_KEY u OPENROUTER_API_KEY',
@@ -165,6 +165,9 @@ async function askViaOpenRouter(p: Platform, prompt: string, ctx: AskContext): P
     searchEngine: p.id === 'grok' && env('PLACTON_GROK_SEARCH') !== 'native' ? 'exa' : 'native',
     country: countryCode(ctx.country),
     maxOutputTokens: p.id === 'claude' ? 16000 : 4000,
+    // ChatGPT razonando a fondo costaba 0,027 $ por respuesta; en «low» responde igual
+    // de bien a preguntas de recomendación y cuesta bastante menos.
+    effort: p.id === 'chatgpt' ? 'low' : undefined,
     signal: ctx.signal,
   })
   const text = p.id === 'perplexity' ? res.text.replace(/\[\d+\]/g, '').trim() : res.text
