@@ -25,7 +25,7 @@ export function AuditCta({ lang }: { lang: Lang }) {
               {t('Ready as soon as you sign up, included in the free trial.', 'Lista nada más registrarte, incluida en la prueba gratis.')}
             </p>
 
-            <form action="/signup" method="get" className="mt-7 flex w-full max-w-md items-center gap-1.5 rounded-full border border-white/80 bg-white p-1.5 shadow-[0_16px_40px_-20px_rgba(4,25,28,0.5)]">
+            <form action="/signup" method="get" className="pill-field mt-7 flex w-full max-w-md items-center gap-1.5 rounded-full border border-white/80 bg-white p-1.5 shadow-[0_16px_40px_-20px_rgba(4,25,28,0.5)]">
               <label htmlFor="audit-web" className="sr-only">
                 {t('Your website', 'Tu web')}
               </label>

@@ -7,7 +7,8 @@ import { canManage, requireCtx } from '@/lib/auth'
 import { getT } from '@/lib/i18n'
 import * as repo from '@/lib/repo'
 import { stripeReady } from '@/lib/stripe'
-import { checkoutAction } from '../actions'
+import { checkoutAction, portalAction } from '../actions'
+import { planName } from '@/lib/plans'
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT()
@@ -30,8 +31,8 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
         hint={
           access.reason === 'trial_ended'
             ? t(
-                "Your trial has ended. Your data is still here: choose a plan and we'll start tracking again tomorrow.",
-                'Tu prueba ha terminado. Tus datos siguen aquí: elige un plan y volvemos a medir mañana mismo.',
+                "Your trial has ended. Your data is still here: choose a plan and tracking starts again right away.",
+                'Tu prueba ha terminado. Tus datos siguen aquí: elige un plan y volvemos a medir enseguida.',
               )
             : t(
                 'Every plan includes weekly tracking on all platforms, weekly insights and site audits. Change or cancel anytime.',
@@ -59,7 +60,16 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
           </Notice>
         </div>
       )}
-      {payer.plan !== 'agencia' && <PlanPicker action={checkoutAction} current={current} canBuy={canManage(role)} usedPrompts={repo.activePromptCount(ws.id)} />}
+      {payer.plan !== 'agencia' && (
+        <PlanPicker
+          action={checkoutAction}
+          portalAction={payer.stripeCustomerId ? portalAction : undefined}
+          current={current}
+          currentLabel={payer.plan === 'trial' ? t('Free trial', 'Prueba gratuita') : planName(payer.plan, lang)}
+          canBuy={canManage(role)}
+          usedPrompts={repo.activePromptCount(ws.id)}
+        />
+      )}
       <div className="anim-rise mt-6" style={{ '--i': 2 } as React.CSSProperties}>
         <AgencyCalculator
           mode="dashboard"

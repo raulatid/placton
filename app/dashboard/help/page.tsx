@@ -15,8 +15,8 @@ const QA: { q: { en: string; es: string }; a: { en: string; es: string } }[] = [
   {
     q: { en: 'How often do you track?', es: '¿Cada cuánto se mide?' },
     a: {
-      en: 'Once a day, in the morning. Every active prompt runs on every platform you have turned on in Settings. “Run now” fills in whatever is missing for the day.',
-      es: 'Una vez al día, por la mañana. Cada pregunta activa se lanza en todas las plataformas que tengas encendidas en Ajustes. Con «Medir ahora» rellenas lo que falte del día.',
+      en: 'Once a week. Every active prompt runs on every platform you have turned on in Settings, with each AI searching the web just like it does for a real user. “Run now” measures right away any prompt that has no answers yet this week.',
+      es: 'Una vez por semana. Cada pregunta activa se lanza en todas las plataformas que tengas encendidas en Ajustes, con cada IA buscando en internet igual que lo hace para una persona. Con «Medir ahora» mides al momento las preguntas que aún no tengan respuesta esta semana.',
     },
   },
   {

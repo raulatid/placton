@@ -212,6 +212,8 @@ export async function portal(ws: Workspace, origin: string): Promise<{ url: stri
       customer: ws.stripeCustomerId,
       return_url: `${origin}/dashboard/settings/billing`,
       locale: 'auto',
+      // Configuración del portal creada por API (en producción no hay una «por defecto»).
+      ...(process.env.STRIPE_PORTAL_CONFIG ? { configuration: process.env.STRIPE_PORTAL_CONFIG } : {}),
     })
     return { url: session.url }
   } catch (err) {

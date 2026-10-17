@@ -106,7 +106,7 @@ function AddRow({
       <label className="mb-2 block text-[14px] font-semibold text-ink">
         {label} <span className="font-normal text-mute">({hint})</span>
       </label>
-      <div className="flex items-center gap-2 rounded-full border border-line bg-white p-1.5 pl-5 focus-within:border-brand-2">
+      <div className="pill-field flex items-center gap-2 rounded-full border border-line bg-white p-1.5 pl-5 transition-shadow focus-within:border-brand-2">
         <input
           value={v}
           onChange={(e) => setV(e.target.value)}
@@ -240,7 +240,7 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
             <label htmlFor="web" className="mb-2 block text-[14px] font-semibold text-ink">
               {t('Your website', 'Tu web')}
             </label>
-            <div className="flex items-center gap-2 rounded-full border border-white bg-white/90 p-1.5 pl-5 shadow-[0_20px_50px_-28px_rgba(11,29,33,0.45)] focus-within:border-brand-2">
+            <div className="pill-field flex items-center gap-2 rounded-full border border-white bg-white/90 p-1.5 pl-5 shadow-[0_20px_50px_-28px_rgba(11,29,33,0.45)] transition-shadow focus-within:border-brand-2">
               <input
                 id="web"
                 autoFocus
