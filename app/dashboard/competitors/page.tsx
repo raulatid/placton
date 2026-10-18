@@ -50,7 +50,7 @@ export default async function CompetitorsPage({ searchParams }: { searchParams: 
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Card i={2} className="overflow-hidden">
           <CardHeader title={t('How you compare', 'Cómo te comparas')} hint={t(`${searches} answers in the period`, `${searches} respuestas en el periodo`)} />
           <ul className="divide-y divide-line-2 border-t border-line-2">

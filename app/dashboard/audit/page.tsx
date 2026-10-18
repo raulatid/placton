@@ -59,7 +59,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
       )}
 
       {current && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
           <div className="space-y-4">
             <Card i={2} className="flex flex-col items-center p-6 text-center">
               <ScoreRing score={current.score} lang={lang} />

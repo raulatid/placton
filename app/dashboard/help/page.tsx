@@ -20,6 +20,13 @@ const QA: { q: { en: string; es: string }; a: { en: string; es: string } }[] = [
     },
   },
   {
+    q: { en: 'Do you send a summary by email?', es: '¿Me llega un resumen por correo?' },
+    a: {
+      en: 'After each weekly run, workspace admins get a summary with your numbers against the previous week, your competitors, the tone and the insight of the week, with an alert at the top when something important changes. Choose what is sent, or whether it reaches you, in Workspace Settings.',
+      es: 'Después de cada medición semanal, quien administra el espacio recibe un resumen con tus cifras frente a la semana anterior, tu competencia, el tono y la idea de la semana, con una alerta arriba si cambia algo importante. Qué se envía, y si te llega a ti, lo eliges en Ajustes del espacio.',
+    },
+  },
+  {
     q: { en: "What's the difference between a direct and an indirect mention?", es: '¿Qué diferencia hay entre mención directa e indirecta?' },
     a: {
       en: "Direct: the answer writes the brand's name. Indirect: the answer cites a page from its website as a source. One answer can count as both, and both count towards visibility.",
@@ -69,7 +76,7 @@ export default async function HelpPage() {
   return (
     <>
       <PageHeader title={t('Help & Support', 'Ayuda')} hint={t('Quick answers and a direct line to us.', 'Respuestas rápidas y una línea directa con nosotros.')} />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Card i={1}>
           <CardHeader
             title={t('Common questions', 'Preguntas habituales')}

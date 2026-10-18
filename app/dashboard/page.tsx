@@ -176,8 +176,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.65fr_1fr]">
-            <Card i={4}>
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
+            <Card i={4} className="min-w-0">
               <CardHeader
                 title={t('Brand visibility', 'Visibilidad por marca')}
                 info={t(

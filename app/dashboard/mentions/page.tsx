@@ -135,7 +135,7 @@ export default async function MentionsPage({ searchParams }: { searchParams: Pro
         </StatTile>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_300px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-4">
           {shown.length ? (
             shown.map((a, k) => <AnswerCard key={a.id} a={a} brands={tracked} lang={lang} i={k + 5} />)

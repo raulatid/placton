@@ -5,7 +5,7 @@ export default function OverviewLoading() {
     <Loading>
       <SkHeader />
       <SkStats spark />
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1.65fr_1fr]">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
         <SkChartCard />
         <SkListCard rows={3} />
       </div>
