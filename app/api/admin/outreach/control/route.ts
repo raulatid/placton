@@ -31,5 +31,7 @@ export async function POST(req: NextRequest) {
     contacts: Object.fromEntries(all<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM outreach_contacts GROUP BY status').map((r) => [r.status, r.n])),
     sent: one<{ n: number }>('SELECT COUNT(*) AS n FROM outreach_messages WHERE error IS NULL')?.n ?? 0,
     events: Object.fromEntries(all<{ kind: string; n: number }>('SELECT kind, COUNT(*) AS n FROM outreach_events GROUP BY kind').map((r) => [r.kind, r.n])),
+    // Últimos errores del servidor (los mismos que se avisan por correo), para diagnosticar sin entrar al panel.
+    errors: all<{ createdAt: string; path: string; message: string }>('SELECT createdAt, path, substr(message, 1, 600) AS message FROM error_log ORDER BY id DESC LIMIT 15'),
   })
 }
