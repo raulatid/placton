@@ -103,6 +103,14 @@ export async function openRouter(opts: OpenRouterOptions): Promise<OpenRouterRes
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 400)
       last = new Error(`OpenRouter ${res.status}: ${detail}`)
+      // La búsqueda nativa no está disponible para ese modelo (o la impide la política de
+      // privacidad de la cuenta): se repite una vez con Exa en lugar de perder la respuesta.
+      const plugins = body.plugins as { engine?: string }[] | undefined
+      if (res.status === 404 && plugins?.[0]?.engine === 'native' && /ZDR|guardrail|data policy|native web search/i.test(detail)) {
+        body.plugins = [{ id: 'web', engine: 'exa', max_results: 5 }]
+        delete body.web_search_options
+        continue
+      }
       if (!retryable(res.status)) throw last
       continue
     }

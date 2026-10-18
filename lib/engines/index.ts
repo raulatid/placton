@@ -163,7 +163,11 @@ async function askViaOpenRouter(p: Platform, prompt: string, ctx: AskContext): P
     webSearch: p.id !== 'perplexity',
     // La búsqueda nativa de Grok lee ~100.000 tokens por pregunta (0,19-0,23 $ medidos el
     // 16-10-2026); con Exa son ~0,02 $. PLACTON_GROK_SEARCH=native vuelve a la nativa.
-    searchEngine: p.id === 'grok' && env('PLACTON_GROK_SEARCH') !== 'native' ? 'exa' : 'native',
+    // Claude con búsqueda nativa queda bloqueado por la opción «sin retención de datos» (ZDR)
+    // de la cuenta de OpenRouter (18-10-2026: 10 de 10 respuestas fallidas); con Exa responde
+    // con sus fuentes por ~0,007 $. PLACTON_CLAUDE_SEARCH=native vuelve a la nativa.
+    searchEngine:
+      (p.id === 'grok' && env('PLACTON_GROK_SEARCH') !== 'native') || (p.id === 'claude' && env('PLACTON_CLAUDE_SEARCH') !== 'native') ? 'exa' : 'native',
     country: countryCode(ctx.country, ctx.language),
     maxOutputTokens: p.id === 'claude' ? 16000 : 4000,
     // ChatGPT razonando a fondo costaba 0,027 $ por respuesta; en «low» responde igual
