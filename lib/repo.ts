@@ -3,6 +3,7 @@ import { key, domainKey } from './norm'
 import { PLANS, TRIAL_DAYS, type Interval, type PaidPlanId, type PlanId } from './plans'
 import type {
   Competitor,
+  DigestMode,
   Invite,
   Member,
   Prompt,
@@ -216,6 +217,8 @@ type WorkspaceEditable = Partial<{
   billingOwnerId: number | null
   promptPool: number
   pastDueSince: string | null
+  digestMode: DigestMode
+  digestSentFor: string | null
 }>
 
 export function updateWorkspace(id: number, fields: WorkspaceEditable) {
@@ -352,6 +355,28 @@ export function setMemberRole(workspaceId: number, userId: number, role: Role) {
 export function removeMember(workspaceId: number, userId: number) {
   run('DELETE FROM members WHERE workspaceId = ? AND userId = ?', [workspaceId, userId])
   run('UPDATE users SET currentWorkspaceId = NULL WHERE id = ? AND currentWorkspaceId = ?', [userId, workspaceId])
+}
+
+/* ───────────── Preferencias de correo ───────────── */
+
+export type EmailKind = 'semanal'
+
+/** Lo que eligió la persona para ese espacio, o null si nunca eligió (manda su rol). */
+export function emailPref(userId: number, workspaceId: number, kind: EmailKind): boolean | null {
+  const r = one<{ enabled: number }>('SELECT enabled FROM email_prefs WHERE userId = ? AND workspaceId = ? AND kind = ?', [userId, workspaceId, kind])
+  return r ? Boolean(r.enabled) : null
+}
+
+/** Guarda la elección; con null la borra y vuelve a mandar el rol. */
+export function setEmailPref(userId: number, workspaceId: number, kind: EmailKind, enabled: boolean | null) {
+  if (enabled === null) {
+    run('DELETE FROM email_prefs WHERE userId = ? AND workspaceId = ? AND kind = ?', [userId, workspaceId, kind])
+    return
+  }
+  run(
+    'INSERT INTO email_prefs (userId, workspaceId, kind, enabled, updatedAt) VALUES (?, ?, ?, ?, ?) ON CONFLICT (userId, workspaceId, kind) DO UPDATE SET enabled = excluded.enabled, updatedAt = excluded.updatedAt',
+    [userId, workspaceId, kind, enabled ? 1 : 0, nowIso()],
+  )
 }
 
 export function pendingInvites(workspaceId: number): Invite[] {

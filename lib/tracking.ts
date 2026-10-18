@@ -1,7 +1,7 @@
 import 'server-only'
 import { addDays, all, nowIso, one, run, today } from './db'
 import { ask, enginesFor, getGoogleTask, platformById, postGoogleTasks, type AskResult, type Platform } from './engines'
-import { extract } from './extract'
+import { extract, type ExtractedCompany } from './extract'
 import { refreshInsights } from './insights'
 import { reportError } from './monitor'
 import * as repo from './repo'
@@ -134,17 +134,39 @@ export function promptKey(text: string, country: string, language: string): stri
 }
 
 /**
+ * Lectura de la IA (empresas, tono y cita) guardada con cada respuesta original,
+ * para que sus copias en otros espacios no la vuelvan a pagar. La columna la crea
+ * db.ts al abrir la base; esto cubre un proceso que ya la tenía abierta antes de
+ * esa migración. Solo se da por creada si existe: cualquier otro fallo (base
+ * bloqueada…) se relanza y la medición acaba en error, y la siguiente lo reintenta.
+ */
+let companiesColumn = false
+function ensureCompaniesColumn() {
+  if (companiesColumn) return
+  try {
+    run('ALTER TABLE answers ADD COLUMN companies TEXT')
+  } catch (err) {
+    if (!/duplicate column/i.test((err as Error).message ?? '')) throw err
+  }
+  companiesColumn = true
+}
+
+type SharedAnswer = AskResult & { sourceId: number; companies: ExtractedCompany[] | null }
+
+/**
  * Respuesta ya obtenida esta semana por otro espacio para la misma pregunta,
  * plataforma, país e idioma. Las IA no saben quién pregunta: la respuesta es la
- * misma muestra que habría salido, sin volver a pagar la búsqueda. Solo se
- * repite el análisis, que depende de las marcas que sigue cada espacio.
+ * misma muestra que habría salido, sin volver a pagar la búsqueda. Tampoco se
+ * repite la lectura de la IA, que solo ve la pregunta y la respuesta: se
+ * reutiliza la de la original y en cada espacio solo se cruzan sus marcas (en
+ * código). Así la misma respuesta da las mismas menciones en todos los espacios.
  */
-function sharedAnswer(key: string, engine: string, wsId: number, day: string): (AskResult & { sourceId: number }) | null {
+function sharedAnswer(key: string, engine: string, wsId: number, day: string): SharedAnswer | null {
   if (process.env.PLACTON_SHARE_ANSWERS === '0') return null
   const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
-  const a = one<{ id: number; reusedFrom: number | null; text: string; model: string; empty: number; searchQueries: string }>(
+  const a = one<{ id: number; reusedFrom: number | null; text: string; model: string; empty: number; searchQueries: string; companies: string | null }>(
     // Solo respuestas originales (pagadas esa semana): reutilizar una copia la iría arrastrando semana tras semana.
-    "SELECT id, reusedFrom, text, model, empty, searchQueries FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND reusedFrom IS NULL AND (empty = 0 OR engine = 'google') AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1",
+    "SELECT id, reusedFrom, text, model, empty, searchQueries, companies FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND reusedFrom IS NULL AND (empty = 0 OR engine = 'google') AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1",
     [key, engine, since, day, wsId],
   )
   if (!a) return null
@@ -153,7 +175,13 @@ function sharedAnswer(key: string, engine: string, wsId: number, day: string): (
   try {
     searchQueries = JSON.parse(a.searchQueries)
   } catch {}
-  return { text: a.text, citations, searchQueries, model: a.model, costUsd: 0, empty: Boolean(a.empty), sourceId: a.reusedFrom ?? a.id }
+  // Las originales de antes de guardar la lectura no la tienen: entonces se lee esa vez.
+  let companies: ExtractedCompany[] | null = null
+  try {
+    const parsed: unknown = a.companies ? JSON.parse(a.companies) : null
+    if (Array.isArray(parsed)) companies = parsed as ExtractedCompany[]
+  } catch {}
+  return { text: a.text, citations, searchQueries, model: a.model, costUsd: 0, empty: Boolean(a.empty), sourceId: a.reusedFrom ?? a.id, companies }
 }
 
 async function execute(ws: Workspace, runId: number, day: string, cells: Cell[], trigger: Run['trigger']) {
@@ -163,122 +191,146 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
   const ctx = { country: ws.country, language: ws.language }
   const beat = () => run('UPDATE runs SET heartbeatAt = ? WHERE id = ?', [nowIso(), runId])
   const pulse = setInterval(beat, 60_000)
+  try {
+    ensureCompaniesColumn()
 
-  // 1) Lo que otro espacio ya preguntó esta semana no se vuelve a pagar.
-  const keyOf = (c: Cell) => promptKey(c.prompt.text, ws.country, ws.language)
-  const shared = new Map<Cell, AskResult & { sourceId: number }>()
-  for (const c of cells) {
-    const hit = sharedAnswer(keyOf(c), c.platform.id, ws.id, day)
-    if (hit) shared.set(c, hit)
-  }
-
-  // 2) En la medición semanal, Google va por la cola normal de DataForSEO (más
-  //    barata): se encargan todas las búsquedas ahora y se recogen al final.
-  const queued = new Map<Cell, { id: string; cost: number }>()
-  const googleCells = cells.filter((c) => c.platform.id === 'google' && c.platform.model === 'ai-overview' && !shared.has(c))
-  if (trigger === 'diario' && googleCells.length && process.env.PLACTON_GOOGLE_QUEUE !== '0') {
-    try {
-      const tasks = await postGoogleTasks(
-        googleCells.map((c) => ({ tag: String(c.prompt.id), prompt: c.prompt.text })),
-        ctx,
-      )
-      for (const c of googleCells) {
-        const t = tasks.get(String(c.prompt.id))
-        if (t) queued.set(c, t)
-      }
-    } catch (err) {
-      console.error('[placton] cola de Google, se usa la búsqueda al momento', err)
+    // 1) Lo que otro espacio ya preguntó esta semana no se vuelve a pagar.
+    const keyOf = (c: Cell) => promptKey(c.prompt.text, ws.country, ws.language)
+    const shared = new Map<Cell, SharedAnswer>()
+    for (const c of cells) {
+      const hit = sharedAnswer(keyOf(c), c.platform.id, ws.id, day)
+      if (hit) shared.set(c, hit)
     }
-  }
 
-  // Las búsquedas encargadas a la cola, al final: así tienen tiempo de estar hechas.
-  const queue = [...cells.filter((c) => !queued.has(c)), ...cells.filter((c) => queued.has(c))]
-
-  const worker = async () => {
-    while (queue.length) {
-      const cell = queue.shift()
-      if (!cell) break
-      const { prompt, platform } = cell
-      const started = Date.now()
+    // 2) En la medición semanal, Google va por la cola normal de DataForSEO (más
+    //    barata): se encargan todas las búsquedas ahora y se recogen al final.
+    const queued = new Map<Cell, { id: string; cost: number }>()
+    const googleCells = cells.filter((c) => c.platform.id === 'google' && c.platform.model === 'ai-overview' && !shared.has(c))
+    if (trigger === 'diario' && googleCells.length && process.env.PLACTON_GOOGLE_QUEUE !== '0') {
       try {
-        const reuse = shared.get(cell)
-        const task = queued.get(cell)
-        const res = reuse
-          ? reuse
-          : task
-            ? await getGoogleTask(task, prompt.text, beat).catch((err) => {
+        const tasks = await postGoogleTasks(
+          googleCells.map((c) => ({ tag: String(c.prompt.id), prompt: c.prompt.text })),
+          ctx,
+        )
+        for (const c of googleCells) {
+          const t = tasks.get(String(c.prompt.id))
+          if (t) queued.set(c, t)
+        }
+      } catch (err) {
+        console.error('[placton] cola de Google, se usa la búsqueda al momento', err)
+      }
+    }
+
+    // Las búsquedas encargadas a la cola, al final: así tienen tiempo de estar hechas.
+    const queue = [...cells.filter((c) => !queued.has(c)), ...cells.filter((c) => queued.has(c))]
+
+    const worker = async () => {
+      while (queue.length) {
+        const cell = queue.shift()
+        if (!cell) break
+        const { prompt, platform } = cell
+        const started = Date.now()
+        // Todo lo pagado en esta celda, se guarde o no la respuesta (vacía, con error o
+        // de un prompt borrado a mitad): así el coste apuntado es el que se paga.
+        let spent = 0
+        // Lo que ya costaron los intentos fallidos de esta celda hoy: su fila se sustituye
+        // y el coste pasa a la nueva, para que la suma de answers.costUsd no lo pierda.
+        const priorCost = (onlyErrors: boolean) =>
+          one<{ c: number }>(
+            `SELECT COALESCE(SUM(costUsd), 0) AS c FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ?${onlyErrors ? ' AND error IS NOT NULL' : ''}`,
+            [ws.id, day, prompt.id, platform.id],
+          )?.c ?? 0
+        try {
+          const reuse = shared.get(cell)
+          const task = queued.get(cell)
+          let res: AskResult
+          if (reuse) res = reuse
+          else if (task) {
+            // La búsqueda en cola se pagó al encargarla: cuenta aunque haya que repetirla al momento.
+            spent += task.cost
+            res = await getGoogleTask(task, prompt.text, beat)
+              .then((r) => ({ ...r, costUsd: 0 }))
+              .catch((err) => {
                 console.error('[placton] búsqueda en cola fallida, se repite al momento', err)
                 return ask(platform, prompt.text, ctx)
               })
-            : await ask(platform, prompt.text, ctx)
-        // Solo Google puede no dar respuesta (sin AI Overview); en las demás, vacío es un fallo y se reintenta.
-        if (res.empty && platform.id !== 'google') throw new Error(`${platform.name} devolvió una respuesta vacía`)
-        const analysis = res.empty ? { mentions: [], citations: [], costUsd: 0 } : await extract(prompt.text, res.text, res.citations, brands)
-        // El prompt se pudo borrar mientras se medía: entonces no hay nada que guardar.
-        if (!one('SELECT id FROM prompts WHERE id = ? AND deletedAt IS NULL', [prompt.id])) continue
-        const cellCost = res.costUsd + analysis.costUsd
-        costUsd += cellCost
+          } else res = await ask(platform, prompt.text, ctx)
+          spent += res.costUsd
+          // Solo Google puede no dar respuesta (sin AI Overview); en las demás, vacío es un fallo y se reintenta.
+          if (res.empty && platform.id !== 'google') throw new Error(`${platform.name} devolvió una respuesta vacía`)
+          const analysis = res.empty
+            ? { mentions: [], citations: [], costUsd: 0, companies: null }
+            : await extract(prompt.text, res.text, res.citations, brands, { companies: reuse?.companies })
+          spent += analysis.costUsd
+          // El prompt se pudo borrar mientras se medía: entonces no hay nada que guardar (lo pagado
+          // cuenta igual en la medición, en el finally).
+          if (!one('SELECT id FROM prompts WHERE id = ? AND deletedAt IS NULL', [prompt.id])) continue
+          const cellCost = spent + priorCost(false)
 
-        // Si un reintento del mismo día deja una celda con error previo, se sustituye.
-        run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ?', [ws.id, day, prompt.id, platform.id])
-        const { id: answerId } = run(
-          `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, text, empty, searchQueries, latencyMs, costUsd, promptKey, reusedFrom, createdAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            runId,
-            ws.id,
-            prompt.id,
-            platform.id,
-            res.model,
-            day,
-            res.text,
-            res.empty ? 1 : 0,
-            JSON.stringify(res.searchQueries),
-            Date.now() - started,
-            cellCost,
-            keyOf(cell),
-            reuse ? reuse.sourceId : null,
-            nowIso(),
-          ],
-        )
-        for (const m of analysis.mentions) {
-          run(
-            `INSERT INTO mentions (answerId, workspaceId, day, engine, promptId, brandKey, name, kind, competitorId, direct, rank, sentiment, quote)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [answerId, ws.id, day, platform.id, prompt.id, m.brandKey, m.name, m.kind, m.competitorId, m.direct ? 1 : 0, m.rank, m.sentiment, m.quote],
+          // Si un reintento del mismo día deja una celda con error previo, se sustituye.
+          run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ?', [ws.id, day, prompt.id, platform.id])
+          const { id: answerId } = run(
+            `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, text, empty, searchQueries, latencyMs, costUsd, promptKey, reusedFrom, companies, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              runId,
+              ws.id,
+              prompt.id,
+              platform.id,
+              res.model,
+              day,
+              res.text,
+              res.empty ? 1 : 0,
+              JSON.stringify(res.searchQueries),
+              Date.now() - started,
+              cellCost,
+              keyOf(cell),
+              reuse ? reuse.sourceId : null,
+              // Solo las originales guardan la lectura: las copias nunca se reutilizan.
+              !reuse && analysis.companies ? JSON.stringify(analysis.companies) : null,
+              nowIso(),
+            ],
           )
+          for (const m of analysis.mentions) {
+            run(
+              `INSERT INTO mentions (answerId, workspaceId, day, engine, promptId, brandKey, name, kind, competitorId, direct, rank, sentiment, quote)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [answerId, ws.id, day, platform.id, prompt.id, m.brandKey, m.name, m.kind, m.competitorId, m.direct ? 1 : 0, m.rank, m.sentiment, m.quote],
+            )
+          }
+          for (const c of analysis.citations) {
+            run('INSERT INTO citations (answerId, workspaceId, day, engine, url, domain, title, brandKey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
+              answerId,
+              ws.id,
+              day,
+              platform.id,
+              c.url,
+              c.domain,
+              c.title,
+              c.brandKey,
+            ])
+          }
+        } catch (err) {
+          const message = ((err as Error).message ?? 'Error desconocido').slice(0, 500)
+          try {
+            // Una respuesta vacía o una búsqueda en cola repetida también se pagan: el coste va en la fila del error.
+            const failedCost = spent + priorCost(true)
+            run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ? AND error IS NOT NULL', [ws.id, day, prompt.id, platform.id])
+            run(
+              `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, latencyMs, costUsd, error, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [runId, ws.id, prompt.id, platform.id, platform.model, day, Date.now() - started, failedCost, message, nowIso()],
+            )
+          } catch {
+            // El prompt ya no existe (borrado a mitad): nada que apuntar, y la medición sigue con el resto.
+          }
+        } finally {
+          costUsd += spent
+          done++
+          run('UPDATE runs SET done = ?, costUsd = ?, heartbeatAt = ? WHERE id = ?', [done, costUsd, nowIso(), runId])
         }
-        for (const c of analysis.citations) {
-          run('INSERT INTO citations (answerId, workspaceId, day, engine, url, domain, title, brandKey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
-            answerId,
-            ws.id,
-            day,
-            platform.id,
-            c.url,
-            c.domain,
-            c.title,
-            c.brandKey,
-          ])
-        }
-      } catch (err) {
-        const message = ((err as Error).message ?? 'Error desconocido').slice(0, 500)
-        try {
-          run('DELETE FROM answers WHERE workspaceId = ? AND day = ? AND promptId = ? AND engine = ? AND error IS NOT NULL', [ws.id, day, prompt.id, platform.id])
-          run(
-            `INSERT INTO answers (runId, workspaceId, promptId, engine, model, day, latencyMs, error, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [runId, ws.id, prompt.id, platform.id, platform.model, day, Date.now() - started, message, nowIso()],
-          )
-        } catch {
-          // El prompt ya no existe (borrado a mitad): nada que apuntar, y la medición sigue con el resto.
-        }
-      } finally {
-        done++
-        run('UPDATE runs SET done = ?, costUsd = ?, heartbeatAt = ? WHERE id = ?', [done, costUsd, nowIso(), runId])
       }
     }
-  }
 
-  try {
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, cells.length) }, worker))
     // Si falla más de la mitad (sin saldo en un proveedor, caída…), la medición no
     // cuenta como hecha: el programador vuelve a intentar las celdas que faltan.

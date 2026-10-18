@@ -50,9 +50,15 @@ export interface Workspace {
   /** Hasta cuándo dura el plan dado a mano (null = sin fecha de fin). */
   manualUntil?: string | null
   manualNote?: string | null
+  /** Resumen semanal por correo: todo (por defecto), solo alertas o nada. */
+  digestMode?: DigestMode
+  /** Medición (su lastTrackedDay) cuyo resumen semanal ya se envió o se descartó. */
+  digestSentFor?: string | null
   createdBy: number | null
   createdAt: string
 }
+
+export type DigestMode = 'all' | 'alerts' | 'off'
 
 export interface Member {
   userId: number

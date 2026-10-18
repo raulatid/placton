@@ -27,6 +27,8 @@ export interface ResponsesResult {
   citations: UrlCitation[]
   searchQueries: string[]
   model: string
+  /** Coste real en USD cuando lo da el proveedor (OpenRouter). Por la API directa no viene y se estima con tokenCost. */
+  costUsd?: number
 }
 
 export class OpenAIError extends Error {
@@ -61,10 +63,10 @@ export async function responses(opts: ResponsesOptions): Promise<ResponsesResult
       country: opts.country,
       schema: opts.schema,
       maxOutputTokens: opts.maxOutputTokens,
-      effort: opts.effort && opts.effort !== 'none' ? opts.effort : undefined,
+      effort: opts.effort,
       signal: opts.signal,
     })
-    return { text: r.text, inputTokens: r.inputTokens, outputTokens: r.outputTokens, citations: r.citations, searchQueries: [], model: r.model }
+    return { text: r.text, inputTokens: r.inputTokens, outputTokens: r.outputTokens, citations: r.citations, searchQueries: [], model: r.model, costUsd: r.costUsd }
   }
   const body: Record<string, unknown> = {
     model: opts.model,
@@ -165,7 +167,7 @@ function parse(json: OpenAIResponse, model: string): ResponsesResult {
 /** Igual que `responses` pero devolviendo el JSON ya parseado del esquema. */
 export async function structured<T>(
   opts: ResponsesOptions & { schema: { name: string; schema: Record<string, unknown> } },
-): Promise<{ data: T; inputTokens: number; outputTokens: number }> {
+): Promise<{ data: T; inputTokens: number; outputTokens: number; costUsd?: number }> {
   const res = await responses(opts)
   let data: T
   try {
@@ -173,5 +175,5 @@ export async function structured<T>(
   } catch {
     throw new OpenAIError(`Respuesta no era JSON válido: ${res.text.slice(0, 200)}`, 0)
   }
-  return { data, inputTokens: res.inputTokens, outputTokens: res.outputTokens }
+  return { data, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd }
 }

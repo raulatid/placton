@@ -3,6 +3,8 @@
 // uno con su búsqueda web nativa (plugin «web» con engine «native»), y devuelve
 // el coste real de cada llamada en usage.cost.
 
+import { tokenCost } from '../pricing'
+
 export interface OpenRouterOptions {
   model: string
   input: string
@@ -14,7 +16,8 @@ export interface OpenRouterOptions {
   country?: string
   schema?: { name: string; schema: Record<string, unknown> }
   maxOutputTokens?: number
-  effort?: 'low' | 'medium' | 'high'
+  /** «none» se manda tal cual: sin el parámetro, OpenRouter usa el razonamiento por defecto del modelo (más caro). */
+  effort?: 'none' | 'low' | 'medium' | 'high'
   signal?: AbortSignal
 }
 
@@ -23,7 +26,7 @@ export interface OpenRouterResult {
   citations: { url: string; title: string }[]
   inputTokens: number
   outputTokens: number
-  /** Coste en USD según OpenRouter (incluye búsqueda). */
+  /** Coste en USD según OpenRouter (incluye búsqueda); estimado por tokens solo si OpenRouter no lo da. */
   costUsd: number
   model: string
 }
@@ -133,7 +136,7 @@ export async function openRouter(opts: OpenRouterOptions): Promise<OpenRouterRes
       citations,
       inputTokens: json.usage?.prompt_tokens ?? 0,
       outputTokens: json.usage?.completion_tokens ?? 0,
-      costUsd: json.usage?.cost ?? 0,
+      costUsd: typeof json.usage?.cost === 'number' ? json.usage.cost : tokenCost(opts.model, json.usage?.prompt_tokens ?? 0, json.usage?.completion_tokens ?? 0),
       model: json.model ?? opts.model,
     }
   }

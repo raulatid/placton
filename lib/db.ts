@@ -298,6 +298,18 @@ CREATE TABLE IF NOT EXISTS email_log (
   createdAt TEXT NOT NULL
 );
 
+-- Preferencias de correo de cada persona en cada espacio (kind = 'semanal':
+-- resumen semanal y alertas). Sin fila, manda el rol: quien administra lo
+-- recibe y los miembros no, salvo que lo activen.
+CREATE TABLE IF NOT EXISTS email_prefs (
+  userId INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspaceId INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  enabled INTEGER NOT NULL,
+  updatedAt TEXT NOT NULL,
+  PRIMARY KEY (userId, workspaceId, kind)
+);
+
 -- Campaña de captación por correo (lib/outreach): buzones de envío conectados
 -- por OAuth, contactos con su secuencia ya redactada, lo enviado, lo recibido
 -- (respuestas, rebotes, bajas) y la lista de exclusión permanente.
@@ -420,6 +432,8 @@ export function db(): DatabaseSync {
     'ALTER TABLE answers ADD COLUMN promptKey TEXT',
     'ALTER TABLE answers ADD COLUMN reusedFrom INTEGER',
     'CREATE INDEX IF NOT EXISTS idx_answers_pool ON answers(promptKey, engine, day)',
+    // Lectura de la IA guardada con cada respuesta original: sus copias no la vuelven a pagar.
+    'ALTER TABLE answers ADD COLUMN companies TEXT',
     // Impagos: desde cuándo, para cortar el acceso tras los días de gracia.
     'ALTER TABLE workspaces ADD COLUMN pastDueSince TEXT',
     // Prompts borrados: se archivan (su historial de respuestas se conserva).
@@ -434,12 +448,23 @@ export function db(): DatabaseSync {
     'ALTER TABLE outreach_mailboxes ADD COLUMN resumedAt TEXT',
     // Pruebas ya usadas (permanente): borrar el espacio o la cuenta no da otra prueba.
     "INSERT OR IGNORE INTO trial_log (workspaceId, userId, domain, createdAt) SELECT id, createdBy, lower(domain), createdAt FROM workspaces WHERE onboarded = 1 AND billingOwnerId IS NULL",
+    // Resumen semanal por correo: todo, solo alertas o nada (lo elige quien administra).
+    "ALTER TABLE workspaces ADD COLUMN digestMode TEXT NOT NULL DEFAULT 'all'",
   ]) {
     try {
       conn.exec(sql)
     } catch {
       // ya existe
     }
+  }
+  // Medición (lastTrackedDay) cuyo resumen ya salió. Al crear la columna, lo ya
+  // medido cuenta como enviado: el primer despliegue no manda de golpe resúmenes
+  // atrasados. Va aparte porque el UPDATE solo debe correr esa primera vez.
+  try {
+    conn.exec('ALTER TABLE workspaces ADD COLUMN digestSentFor TEXT')
+    conn.exec('UPDATE workspaces SET digestSentFor = lastTrackedDay')
+  } catch {
+    // ya existe
   }
   globalForDb.__plactonDb = conn
   return conn

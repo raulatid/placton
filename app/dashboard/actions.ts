@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation'
 import { suggestPrompts } from '@/lib/ai'
 import { runAudit, saveAudit } from '@/lib/audit'
 import { canManage, endOtherSessions, endSession, hashPassword, passwordProblem, randomToken, requireCtx, requireUser, verifyPassword } from '@/lib/auth'
+import { digestByDefault } from '@/lib/digest'
 import { appUrl, sendEmail, siteUrl } from '@/lib/email'
 import { libMessage } from '@/components/panel/format'
 import { availablePlatformIds } from '@/lib/engines'
@@ -274,6 +275,25 @@ export async function saveEnginesAction(_: ActionResult, fd: FormData): Promise<
   repo.updateWorkspace(workspace.id, { engines: chosen })
   revalidatePath('/dashboard/settings')
   return { ok: t('Platforms updated. Changes apply from the next run.', 'Plataformas actualizadas. Se aplican desde la próxima medición.') }
+}
+
+/**
+ * Resumen semanal por correo. Qué se envía en el espacio (todo, solo alertas o
+ * nada) lo decide quien administra; si te llega a ti, cada persona.
+ */
+export async function saveDigestAction(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  const { workspace, role, user } = await requireCtx()
+  const { t } = await getT()
+  const manage = canManage(role)
+  if (manage) {
+    const mode = s(fd, 'mode')
+    if (mode === 'all' || mode === 'alerts' || mode === 'off') repo.updateWorkspace(workspace.id, { digestMode: mode })
+  }
+  // Si coincide con lo que toca por su rol no se guarda: así, si cambia de rol, vale lo del rol nuevo.
+  const me = fd.get('me') === 'on'
+  repo.setEmailPref(user.id, workspace.id, 'semanal', me === digestByDefault(role) ? null : me)
+  revalidatePath('/dashboard/settings')
+  return { ok: t('Email preferences saved.', 'Preferencias de correo guardadas.') }
 }
 
 export async function deleteWorkspaceAction(fd: FormData) {

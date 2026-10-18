@@ -121,12 +121,30 @@ export const FAQ_GROUPS: FaqGroup[] = [
         ],
       },
       {
+        id: 'email-summary',
+        q: bi('Do you send me a summary by email?', '¿Me llega un resumen por correo?'),
+        a: [
+          bi(
+            'Yes. After each weekly run we email the workspace owners and admins a summary: your visibility, average position and answers analysed compared with the previous week, how you stand against your competitors, whether AI cites your website, the tone of the answers and the most important insight of the week.',
+            'Sí. Después de cada medición semanal enviamos un resumen por correo a quien administra el espacio: tu visibilidad, tu posición media y las respuestas analizadas frente a la semana anterior, cómo estás frente a tu competencia, si las IA citan tu web, el tono de las respuestas y la idea más importante de la semana.',
+          ),
+          bi(
+            'When something changes for real, the email starts with an alert: your visibility drops 10 points or more, a competitor overtakes you, or an AI speaks badly of your brand in an answer where it did not before.',
+            'Si algo cambia de verdad, el correo empieza con una alerta: cuando tu visibilidad baja 10 puntos o más, cuando un competidor te adelanta o cuando una IA habla mal de tu marca en una respuesta donde antes no lo hacía.',
+          ),
+          bi(
+            'You choose it in Workspace settings: the summary with alerts, alerts only or nothing. Each person can also turn it on or off just for themselves, including from the unsubscribe link in the email.',
+            'Lo eliges en Ajustes del espacio: el resumen con alertas, solo las alertas o nada. Además, cada persona puede activarlo o quitárselo solo para sí misma, también desde el enlace de baja del propio correo.',
+          ),
+        ],
+      },
+      {
         id: 'traffic',
         q: bi('Can Placton help me get more visibility and traffic from AI?', '¿Placton me ayuda a conseguir más visibilidad y tráfico desde la IA?'),
         a: [
           bi(
-            'That is the goal. Every week you get personalised insights based on your data: which pages to publish or improve, which outside sources to get listed on and what your competitors are doing better. The 18-point audit also tells you what to fix on your site so AI can read it properly.',
-            'Ese es el objetivo. Cada semana recibes ideas personalizadas basadas en tus datos: qué páginas publicar o mejorar, en qué fuentes externas conseguir presencia y qué hace mejor tu competencia. Además, la auditoría de 18 puntos te dice qué corregir en tu web para que la IA la lea bien.',
+            'That is the goal. Every week you get personalised insights based on your data, in your dashboard and by email: which pages to publish or improve, which outside sources to get listed on and what your competitors are doing better. The 18-point audit also tells you what to fix on your site so AI can read it properly.',
+            'Ese es el objetivo. Cada semana recibes, en tu panel y por correo, ideas personalizadas basadas en tus datos: qué páginas publicar o mejorar, en qué fuentes externas conseguir presencia y qué hace mejor tu competencia. Además, la auditoría de 18 puntos te dice qué corregir en tu web para que la IA la lea bien.',
           ),
           bi(
             'Nobody can guarantee a position in AI answers, but with Placton you will know what to do and be able to measure whether it works.',

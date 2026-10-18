@@ -70,8 +70,9 @@ function PrivacyEn() {
             <li>To create and manage your account, provide the service and support you. Legal basis: performance of the contract.</li>
             <li>To charge subscriptions and issue invoices. Legal basis: performance of the contract and compliance with tax and accounting obligations.</li>
             <li>
-              To send you emails about the service, such as access, invitations, trial reminders, payments, weekly insights and important
-              changes. Legal basis: performance of the contract.
+              To send you emails about the service, such as access, invitations, trial reminders, payments, the weekly summary with its
+              alerts and important changes. Legal basis: performance of the contract. You can turn the weekly summary off in Settings or with
+              one click from the email itself.
             </li>
             <li>To reply to the messages you send us. Legal basis: your consent when you write to us.</li>
             <li>To protect the service against abuse and fraud, and to improve it with aggregated data. Legal basis: legitimate interest.</li>
@@ -230,8 +231,9 @@ function PrivacyEs() {
               contables.
             </li>
             <li>
-              Enviarte correos sobre el servicio, como el acceso, las invitaciones, los avisos de la prueba, los cobros, las ideas
-              semanales y los cambios importantes. Base legal: ejecución del contrato.
+              Enviarte correos sobre el servicio, como el acceso, las invitaciones, los avisos de la prueba, los cobros, el resumen
+              semanal con sus alertas y los cambios importantes. Base legal: ejecución del contrato. El resumen semanal puedes
+              desactivarlo en Ajustes o con un clic desde el propio correo.
             </li>
             <li>Responder a los mensajes que nos envías. Base legal: tu consentimiento al escribirnos.</li>
             <li>Proteger el servicio frente a abusos y fraudes, y mejorarlo con datos agregados. Base legal: interés legítimo.</li>

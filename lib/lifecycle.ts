@@ -9,7 +9,9 @@ import * as repo from './repo'
 // 1) avisos de la prueba gratis (2 días antes y el día que termina);
 // 2) vigilancia del DNS: la raíz placton.tech apunta con un registro A a la IP
 //    de Railway (un CNAME ocultaba los MX del correo). Si Railway cambia esa IP,
-//    se corrige sola en Cloudflare.
+//    se corrige sola en Cloudflare;
+// 3) resumen semanal y alertas por correo de cada medición terminada (lib/digest),
+//    al final para que los envíos (de uno en uno) no retrasen lo demás.
 
 export async function runLifecycle() {
   try {
@@ -43,6 +45,13 @@ export async function runLifecycle() {
     retention()
   } catch (err) {
     reportError(err, 'lifecycle:retención')
+  }
+  try {
+    const { weeklyDigests } = await import('./digest')
+    const res = await weeklyDigests()
+    if (res.emails) console.log(`[placton] resumen semanal: ${res.emails} correos en ${res.sent.length} espacios`)
+  } catch (err) {
+    reportError(err, 'lifecycle:resumen semanal')
   }
 }
 

@@ -10,6 +10,7 @@ import {
   inviteAction,
   moreSuggestionsAction,
   removeLogoAction,
+  saveDigestAction,
   saveEnginesAction,
   saveProfileAction,
   saveWorkspaceAction,
@@ -288,6 +289,55 @@ export function EnginesForm({ all, selected, disabled }: { all: { id: string; av
           {t('Save platforms', 'Guardar plataformas')}
         </button>
       )}
+    </form>
+  )
+}
+
+/**
+ * Resumen semanal por correo: qué se envía en el espacio (solo quien administra)
+ * y si te llega a ti (cualquiera). Debajo, a quién le llega ahora.
+ */
+export function DigestForm({ mode, me, manage, recipients }: { mode: 'all' | 'alerts' | 'off'; me: boolean; manage: boolean; recipients: string[] }) {
+  const [state, action, pending] = useActionState<ActionResult, FormData>(saveDigestAction, {})
+  const t = useT()
+  const names = recipients.join(', ')
+  return (
+    <form action={action} className="space-y-4">
+      <Field label={t('What we send', 'Qué enviamos')} hint={manage ? undefined : t('Only workspace admins can change this.', 'Solo quien administra el espacio puede cambiarlo.')}>
+        <Select
+          name="mode"
+          label={t('What we send', 'Qué enviamos')}
+          defaultValue={mode}
+          disabled={!manage}
+          className="w-full"
+          options={[
+            { value: 'all', label: t('Weekly summary and alerts', 'Resumen semanal y alertas') },
+            { value: 'alerts', label: t('Alerts only', 'Solo alertas') },
+            { value: 'off', label: t('Off', 'Desactivado') },
+          ]}
+        />
+      </Field>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input type="checkbox" name="me" defaultChecked={me} className="mt-0.5 h-4 w-4 shrink-0 accent-[#00a38c]" />
+        <span className="text-[14px] font-semibold text-ink">
+          {t('Send it to me', 'Enviármelo a mí')}
+          <span className="block text-[12.5px] font-normal text-mute">{t('Only for you: everyone chooses their own.', 'Solo para ti: cada persona elige el suyo.')}</span>
+        </span>
+      </label>
+      <p className="text-[13px] leading-relaxed text-mute">
+        {mode === 'off'
+          ? t('Turned off for the whole workspace.', 'Desactivado para todo el espacio.')
+          : recipients.length
+            ? mode === 'alerts'
+              ? t(`Goes to: ${names}. Only in weeks with an alert.`, `Le llega a: ${names}. Solo las semanas con alguna alerta.`)
+              : t(`Goes to: ${names}.`, `Le llega a: ${names}.`)
+            : t('Right now it goes to nobody.', 'Ahora mismo no le llega a nadie.')}
+      </p>
+      <Result state={state} />
+      <button className={btnClass('secondary')} disabled={pending}>
+        {pending && <Spinner />}
+        {t('Save', 'Guardar')}
+      </button>
     </form>
   )
 }

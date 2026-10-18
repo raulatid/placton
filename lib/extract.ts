@@ -52,7 +52,8 @@ Además:
 - El orden de la lista es el orden en que aparecen en el texto.
 - Sé severo con el tono: "negativo" solo si hay una pega explícita; "positivo" solo si hay elogio o recomendación clara.`
 
-interface ExtractedCompany {
+/** Lo que lee la IA de una respuesta. Solo depende de la pregunta y la respuesta, no de las marcas de cada espacio. */
+export interface ExtractedCompany {
   name: string
   asWritten: string
   sentiment: Sentiment
@@ -74,6 +75,8 @@ export interface Extraction {
   mentions: ExtractedMention[]
   citations: { url: string; domain: string; title: string; brandKey: string | null }[]
   costUsd: number
+  /** Lectura de la IA, para reutilizarla en otra copia de la misma respuesta (null si la IA falló). */
+  companies: ExtractedCompany[] | null
 }
 
 export async function extract(
@@ -81,12 +84,19 @@ export async function extract(
   answerText: string,
   rawCitations: { url: string; title: string }[],
   brands: TrackedBrand[],
-  signal?: AbortSignal,
+  opts: {
+    signal?: AbortSignal
+    /** Lectura ya hecha de esta misma respuesta (respuesta compartida): no se vuelve a pagar la IA. */
+    companies?: ExtractedCompany[] | null
+  } = {},
 ): Promise<Extraction> {
   let companies: ExtractedCompany[] = []
+  let read: ExtractedCompany[] | null = null
   let costUsd = 0
 
-  if (answerText.trim()) {
+  if (opts.companies) {
+    companies = read = opts.companies
+  } else if (answerText.trim()) {
     try {
       const res = await structured<{ companies: ExtractedCompany[] }>({
         model: MODEL,
@@ -95,10 +105,11 @@ export async function extract(
         effort: 'low',
         schema: { name: 'mentions', schema: SCHEMA },
         maxOutputTokens: 4000,
-        signal,
+        signal: opts.signal,
       })
-      companies = res.data.companies ?? []
-      costUsd = tokenCost(MODEL, res.inputTokens, res.outputTokens)
+      companies = read = res.data.companies ?? []
+      // Por OpenRouter, lo que cobra de verdad; las tarifas fijas solo para la API directa.
+      costUsd = res.costUsd ?? tokenCost(MODEL, res.inputTokens, res.outputTokens)
     } catch (err) {
       // Sin matices de la IA seguimos detectando las marcas seguidas contra el
       // texto: el dato duro nunca se pierde. Se avisa (como mucho una vez por hora).
@@ -197,7 +208,7 @@ export async function extract(
     })
   }
 
-  return { mentions, citations, costUsd }
+  return { mentions, citations, costUsd, companies: read }
 }
 
 function snippet(text: string, at: number): string {

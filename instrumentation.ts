@@ -1,6 +1,7 @@
 // Programador interno: cada hora lanza la medición semanal de los espacios que
 // la tengan pendiente (a partir de las 7:00 de Madrid), envía los avisos de la
-// prueba gratis y vigila el DNS; cada 2 minutos mueve la campaña de correo.
+// prueba gratis y el resumen semanal por correo, y vigila el DNS; cada 2 minutos
+// mueve la campaña de correo.
 // Va apagado en desarrollo para no gastar API sin
 // querer: PLACTON_SCHEDULER=1 lo enciende.
 
@@ -21,7 +22,7 @@ export async function register() {
   let busy = false
   const tick = async () => {
     const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hour12: false }).format(new Date()))
-    // Avisos de la prueba y vigilancia del DNS: a cualquier hora.
+    // Avisos de la prueba, resumen semanal (él mira su horario) y DNS: a cualquier hora.
     void runLifecycle()
     if (busy || hour < 7) return
     busy = true

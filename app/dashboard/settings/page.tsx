@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
-import { EnginesForm, LogoForm, WorkspaceForm } from '@/components/panel/Forms'
+import { DigestForm, EnginesForm, LogoForm, WorkspaceForm } from '@/components/panel/Forms'
 import { btnClass, Card, CardHeader, Notice } from '@/components/ui'
 import { canManage, requireCtx } from '@/lib/auth'
+import { digestOn, recipients } from '@/lib/digest'
 import { platforms } from '@/lib/engines'
 import { getT } from '@/lib/i18n'
 import * as repo from '@/lib/repo'
@@ -14,10 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SettingsPage() {
-  const { workspace: ws, role } = await requireCtx()
+  const { workspace: ws, role, user } = await requireCtx()
   const { t } = await getT()
   const manage = canManage(role)
   const members = repo.membersOf(ws.id)
+  const digestMode = ws.digestMode ?? 'all'
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr]">
       <Card i={1}>
@@ -40,8 +42,22 @@ export default async function SettingsPage() {
             <EnginesForm all={platforms().map((p) => ({ id: p.id, available: p.available }))} selected={ws.engines} disabled={!manage} />
           </div>
         </Card>
+        <Card i={3}>
+          <CardHeader
+            title={t('Email summary', 'Resumen por correo')}
+            hint={t('After each weekly run, with alerts when something changes.', 'Tras cada medición semanal, con alertas si algo cambia.')}
+          />
+          <div className="px-6 pb-6">
+            <DigestForm
+              mode={digestMode}
+              me={digestOn(user.id, ws.id, role)}
+              manage={manage}
+              recipients={digestMode === 'off' ? [] : recipients(ws.id).map((r) => repo.displayName(r))}
+            />
+          </div>
+        </Card>
         {role === 'owner' && (
-          <Card i={3}>
+          <Card i={4}>
             <CardHeader
               title={t('Delete workspace', 'Borrar espacio')}
               hint={t("Its prompts, answers and insights are deleted. This can't be undone.", 'Se borran sus prompts, respuestas e ideas. No se puede deshacer.')}

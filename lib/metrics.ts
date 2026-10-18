@@ -179,6 +179,11 @@ export function overview(ws: Workspace, rangeId: RangeId): Overview {
   }
 }
 
+/** Las cifras del panel para unas fechas concretas (el resumen semanal por correo). */
+export function windowStats(ws: Workspace, from: string, to: string): { searches: number; brands: BrandStats[] } {
+  return brandStatsFor(ws, from, to)
+}
+
 export function brandStats(ws: Workspace, rangeId: RangeId): { range: Range; searches: number; brands: BrandStats[] } {
   const range = resolveRange(ws.id, rangeId)
   const cur = brandStatsFor(ws, range.from, range.to)

@@ -90,6 +90,20 @@ un solo servidor Node con volumen persistente (p. ej. Railway). Cambiar a Postgr
 Resend (`RESEND_API_KEY` + `PLACTON_EMAIL_FROM` con dominio verificado). Sin configurar, los correos se
 apuntan en `email_log` y los enlaces (invitaciones, recuperar contraseña) se enseñan en pantalla.
 
+### Resumen semanal y alertas
+
+`lib/digest.ts`, desde la tarea de cada hora (`lib/lifecycle.ts`). Un correo por medición semanal
+terminada (se ancla en `workspaces.lastTrackedDay` y se apunta en `digestSentFor`), entre las 8:00 y las
+20:59 de Madrid, a quien administra el espacio más los miembros que lo activen. La medición del alta y
+«Medir ahora» no mandan nada, ni los espacios sin acceso. Alertas: la visibilidad baja 10 puntos o más,
+un competidor te adelanta (5 puntos o más) o hay menciones negativas nuevas.
+
+- `PLACTON_DIGEST=0` lo apaga entero.
+- `PLACTON_EMAIL_SECRET` (o, si falta, `CRON_SECRET`) firma el enlace de baja (`/api/email-off/<token>`,
+  con baja en un clic de Gmail y Yahoo). Sin ninguna de las dos, el correo va sin enlace de baja y
+  remite a Ajustes.
+- Vista previa sin enviar: `node --experimental-transform-types scripts/digest-preview.mts <id del espacio> [salida.html]`.
+
 ## Captura de la portada
 
 La portada enseña una captura real del panel (`public/landing/dashboard-en-*.webp` y `-es-*.webp`), no una
