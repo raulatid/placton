@@ -1,21 +1,13 @@
 import { IconCheck, IconX } from '@/components/icons'
 import { cx } from '@/components/ui'
-import { locale, makeT, type Lang } from '@/lib/i18n-shared'
+import { makeT, type Lang } from '@/lib/i18n-shared'
+import { CountUp } from './CountUp'
+import { DIRECT, INDIRECT, fmtNum } from './format'
 
 // Piezas visuales pequeñas de la web pública, en los dos idiomas. Imitan las
 // del panel, pero con números y textos formateados según el idioma.
 
-export const DIRECT = '#00a38c'
-export const INDIRECT = '#eb6834'
-
-export function fmtNum(n: number, lang: Lang, digits = 0): string {
-  return n.toLocaleString(locale(lang), { minimumFractionDigits: digits, maximumFractionDigits: digits })
-}
-
-/** 41% en inglés, 41 % en español. */
-export function fmtPct(n: number, lang: Lang, digits = 0): string {
-  return lang === 'es' ? `${fmtNum(n, lang, digits)} %` : `${fmtNum(n, lang, digits)}%`
-}
+export { DIRECT, INDIRECT, fmtNum, fmtPct } from './format'
 
 export function DeltaChip({
   value,
@@ -39,7 +31,10 @@ export function DeltaChip({
   )
 }
 
-/** Anillo de progreso con el valor en el centro. */
+/**
+ * Anillo de progreso con el valor en el centro. Se dibuja al aparecer
+ * (anim-ring) y, con `count`, la cifra del centro sube a la vez.
+ */
 export function Ring({
   value,
   size = 96,
@@ -47,6 +42,8 @@ export function Ring({
   center,
   caption,
   stroke = 10,
+  count,
+  i = 0,
 }: {
   value: number
   size?: number
@@ -54,9 +51,11 @@ export function Ring({
   center: string
   caption?: string
   stroke?: number
+  /** Cifra del centro que sube; `delay` en ms desde que se ve (por defecto, el del anillo). */
+  count?: { value: number; lang: Lang; delay?: number }
+  i?: number
 }) {
   const r = 50
-  const c = 2 * Math.PI * r
   const v = Math.max(0, Math.min(100, value))
   return (
     <svg width={size} height={size} viewBox="0 0 120 120" aria-hidden="true" className="shrink-0">
@@ -69,11 +68,15 @@ export function Ring({
         stroke={color}
         strokeWidth={stroke}
         strokeLinecap="round"
-        strokeDasharray={`${(v / 100) * c} ${c}`}
+        pathLength={100}
+        strokeDasharray="100"
+        strokeDashoffset={100 - v}
         transform="rotate(-90 60 60)"
+        className="anim-ring"
+        style={{ '--i': i } as React.CSSProperties}
       />
       <text x="60" y={caption ? 60 : 69} textAnchor="middle" fontSize={caption ? 30 : 28} fontWeight="800" fill="#0b1d21" className="num">
-        {center}
+        {count ? <CountUp as="tspan" value={count.value} lang={count.lang} delay={count.delay ?? 150 + i * 80} /> : center}
       </text>
       {caption && (
         <text x="60" y="80" textAnchor="middle" fontSize="12" fill="#66797d">
@@ -90,18 +93,20 @@ export function scoreColor(score: number): string {
 
 export type CheckStatus = 'ok' | 'warn' | 'fail'
 
+const STATUS_DOT: Record<CheckStatus, string> = { ok: '#047857', warn: '#d97706', fail: '#c2410c' }
+
+/** Estado de un punto de la auditoría: círculo neutro con el glifo en tinta y el color en un punto. */
 export function StatusIcon({ status }: { status: CheckStatus }) {
-  if (status === 'ok')
-    return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-good-soft text-good">
-        <IconCheck size={12} />
-      </span>
-    )
-  if (status === 'warn')
-    return <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warn-soft text-[12px] font-extrabold text-warn">!</span>
   return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-bad-soft text-bad">
-      <IconX size={12} />
+    <span className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-line-2 text-ink">
+      {status === 'ok' ? (
+        <IconCheck size={12} />
+      ) : status === 'warn' ? (
+        <span className="text-[12px] font-extrabold leading-none">!</span>
+      ) : (
+        <IconX size={12} />
+      )}
+      <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-white" style={{ background: STATUS_DOT[status] }} />
     </span>
   )
 }

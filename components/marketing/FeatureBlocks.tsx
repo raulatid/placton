@@ -1,11 +1,18 @@
+import { Fragment } from 'react'
 import { makeT, type Lang } from '@/lib/i18n-shared'
 import { cx } from '@/components/ui'
 import { AuditSnippet, CompetitorsSnippet, InsightsSnippet, MentionsSnippet } from './FeatureVisuals'
 import { Container, PANELS, type PanelId } from './parts'
+import { Reveal } from './Reveal'
 
 // Cuatro bloques de funciones: tarjeta blanca con el texto a la izquierda y, a
 // la derecha y a sangre, un fragmento de interfaz sobre un fondo propio de cada
 // bloque. Algunos fragmentos se salen por el borde, como una captura recortada.
+//
+// Al verse, el bloque entra y su texto sube línea a línea; el fragmento llega
+// después (los recortados, desde el corte) y lo de dentro arranca 500 ms más
+// tarde. El fragmento tiene su propio <Reveal>: en móvil va debajo del texto y
+// espera a verse él. El fondo respira despacio solo mientras se ve.
 
 function Block({
   index,
@@ -26,33 +33,54 @@ function Block({
   children: React.ReactNode
 }) {
   return (
-    <article className="grid grid-cols-1 overflow-hidden rounded-[24px] bg-white shadow-[0_1px_2px_rgba(4,25,28,0.04)] lg:min-h-[520px] lg:grid-cols-2">
+    <Reveal
+      as="article"
+      live
+      className="grid grid-cols-1 overflow-hidden rounded-[24px] bg-white shadow-[0_1px_2px_rgba(4,25,28,0.04)] lg:min-h-[520px] lg:grid-cols-2"
+    >
       <div className="flex flex-col justify-between gap-10 p-7 sm:p-10 lg:p-12">
         <div>
-          <p className="font-mono text-[12.5px] text-mute">
+          <p className="rv font-mono text-[12.5px] text-mute" style={{ '--i': 0 } as React.CSSProperties}>
             {String(index).padStart(2, '0')} / {label}
           </p>
-          <h3 className="mt-4 text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-ink sm:text-[36px]">
+          {/* Desde sm, una línea debajo de otra y cada una sube por su cuenta. En
+              móvil las líneas van seguidas, como texto corrido, y sube el título
+              entero (partirlo por líneas dejaría palabras sueltas). */}
+          <h3
+            className="rv-title mt-4 text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-ink sm:text-[36px]"
+            style={{ '--i': 1 } as React.CSSProperties}
+          >
             {lines.map((l, i) => (
-              <span key={i} className="sm:block">
-                {l}
+              <Fragment key={i}>
+                <span className="rv-line sm:block" style={{ '--i': i + 1 } as React.CSSProperties}>
+                  {l}
+                </span>
                 {i < lines.length - 1 ? ' ' : ''}
-              </span>
+              </Fragment>
             ))}
           </h3>
         </div>
-        <p className="max-w-[400px] text-pretty text-[16px] leading-relaxed text-ink-2">{text}</p>
+        <p className="rv max-w-[400px] text-pretty text-[16px] leading-relaxed text-ink-2" style={{ '--i': lines.length + 1 } as React.CSSProperties}>
+          {text}
+        </p>
       </div>
       <div
         className={cx(
-          'relative flex min-h-[340px] overflow-hidden',
+          'relative isolate flex min-h-[340px] overflow-hidden',
           bleed ? 'items-start justify-start pl-8 pt-10 sm:pl-14 sm:pt-14' : 'items-center justify-center px-5 py-10 sm:p-14',
         )}
-        style={PANELS[panel]}
       >
-        <div className={cx(bleed ? 'w-[540px] shrink-0 [&>*]:max-w-none' : 'flex w-full justify-center')}>{children}</div>
+        <div aria-hidden="true" className="panel-drift absolute inset-0" style={PANELS[panel]} />
+        {/* Con su propio disparo: en móvil va debajo del texto y lo de dentro
+            (barras, anillos, ranking) no arranca hasta que se ve. */}
+        <Reveal
+          className={cx('relative z-10', bleed ? 'rv-r w-[540px] shrink-0 [&>*]:max-w-none' : 'rv flex w-full justify-center')}
+          style={{ '--i': 4, '--anim-base': '500ms' } as React.CSSProperties}
+        >
+          {children}
+        </Reveal>
       </div>
-    </article>
+    </Reveal>
   )
 }
 

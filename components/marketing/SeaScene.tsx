@@ -1,8 +1,9 @@
 import Image from 'next/image'
 
 // Fondo marino de la portada: rayos de luz tenues arriba y, donde empieza la
-// captura del panel, la superficie del mar hasta el horizonte. Decorativo; los
-// rayos se quedan quietos con «reducir movimiento».
+// captura del panel, la superficie del mar hasta el horizonte. Decorativo: los
+// rayos se mecen, el mar sube y baja 3 px y, al bajar, los rayos van más lentos
+// que la página. Todo se para fuera de vista y con «reducir movimiento».
 
 const SEA_VERSION = 2
 
@@ -16,7 +17,7 @@ export function SeaSurface() {
     <>
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 -top-[120px] h-[320px] sm:-top-[170px] sm:h-[460px] lg:-top-[215px] lg:h-[580px]"
+        className="sea-swell pointer-events-none absolute inset-x-0 -top-[120px] h-[320px] sm:-top-[170px] sm:h-[460px] lg:-top-[215px] lg:h-[580px]"
         style={{ maskImage: SEA_MASK, WebkitMaskImage: SEA_MASK }}
       >
         <Image src={`/landing/sea-${SEA_VERSION}.webp`} alt="" fill priority sizes="100vw" className="object-cover object-top" />
@@ -43,7 +44,7 @@ const RAYS = [
 
 export function SeaRays() {
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[900px] overflow-hidden">
+    <div aria-hidden="true" className="par-slow pointer-events-none absolute inset-x-0 top-0 h-[900px] overflow-hidden">
       {/* El sol, muy difuso, justo encima de la superficie */}
       <div className="absolute left-1/2 top-[-300px] h-[520px] w-[1000px] -translate-x-1/2 rounded-full" style={{ background: 'radial-gradient(closest-side, rgba(255,255,255,0.16), transparent)' }} />
       {RAYS.map((r, i) => (

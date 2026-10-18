@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AgencyCalculator } from '@/components/AgencyCalculator'
 import { IconArrow, IconCheck } from '@/components/icons'
 import { useLang, useT } from '@/components/LangProvider'
 import { cx } from '@/components/ui'
 import { pick } from '@/lib/i18n-shared'
 import { PlatformLogo } from './PlatformLogo'
+import { Reveal } from './Reveal'
 import {
   PAID_PLANS,
   PLANS,
@@ -25,7 +26,10 @@ import {
 const DISCOUNT = Math.round(YEARLY_DISCOUNT * 100)
 const PLATFORM_IDS = ['chatgpt', 'claude', 'google', 'perplexity', 'grok']
 
-function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
+const STRIP = 'linear-gradient(90deg, #9fe7da, #00a38c 22.5%, #2a78d6 50%, #00a38c 77.5%, #9fe7da)'
+
+/** `changed`: el periodo ya se ha cambiado alguna vez (el precio entra con movimiento solo entonces). */
+function PlanCard({ id, period, changed }: { id: PaidPlanId; period: Interval; changed: boolean }) {
   const t = useT()
   const lang = useLang()
   const plan = PLANS[id]
@@ -79,10 +83,13 @@ function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
   ]
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-[20px] border border-line bg-white p-6 shadow-[0_1px_2px_rgba(4,25,28,0.04)]">
-      {/* El plan recomendado se marca con una franja fina arriba, sin más adornos. */}
+    <div className="lift relative flex h-full flex-col overflow-hidden rounded-[20px] border border-line bg-white p-6 shadow-[0_1px_2px_rgba(4,25,28,0.04)]">
+      {/* El plan recomendado se marca con una franja fina arriba, sin más adornos;
+          su degradado va y viene despacio (doble de ancho, en espejo). */}
       {plan.highlight && (
-        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5" style={{ background: 'linear-gradient(90deg, #9fe7da, #00a38c 45%, #2a78d6)' }} />
+        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1.5 overflow-hidden">
+          <span className="plan-strip absolute inset-y-0 left-0 w-[200%]" style={{ background: STRIP }} />
+        </span>
       )}
       <h3 className="flex items-center gap-2 text-[20px] font-bold tracking-[-0.02em] text-ink">
         {planName(id, lang)}
@@ -91,15 +98,17 @@ function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
       <p className="mt-1 text-[14px] text-mute">{t(`Monitor ${plan.prompts} prompts weekly`, `Sigue ${plan.prompts} prompts cada semana`)}</p>
 
       <p className="mt-6 flex flex-wrap items-baseline gap-x-1.5">
-        <span className="num text-[38px] font-bold leading-none tracking-[-0.04em] text-ink">{money(monthlyEquivalent(id, period), lang)}</span>
+        <span key={period} className={cx('num text-[38px] font-bold leading-none tracking-[-0.04em] text-ink', changed && 'anim-swap')}>
+          {money(monthlyEquivalent(id, period), lang)}
+        </span>
         <span className="text-[13px] text-mute">{t('/ month (USD)', '/ mes (USD)')}</span>
       </p>
       <p className="mt-2 min-h-[18px] text-[12.5px] text-mute">
         {period === 'year' ? (
-          <>
+          <span key={period} className={changed ? 'anim-fade' : undefined} style={{ '--i': 0 } as React.CSSProperties}>
             {t(`${money(priceFor(id, 'year'), lang)} billed yearly`, `${money(priceFor(id, 'year'), lang)} al año`)} ·{' '}
             <span className="font-semibold text-good">{t(`save ${money(saving, lang)}`, `ahorras ${money(saving, lang)}`)}</span>
-          </>
+          </span>
         ) : null}
       </p>
 
@@ -126,7 +135,33 @@ function PlanCard({ id, period }: { id: PaidPlanId; period: Interval }) {
 export function Pricing({ as: Heading = 'h2' }: { as?: 'h1' | 'h2' }) {
   const t = useT()
   const [period, setPeriod] = useState<Interval>('month')
+  const [changed, setChanged] = useState(false)
   const yearlyLabel = t(`Yearly (save ${DISCOUNT}%)`, `Anual (ahorra ${DISCOUNT}\u00a0%)`)
+
+  // Indicador que se desliza bajo el periodo elegido. Hasta medirlo, el botón
+  // activo lleva su propio fondo (sin parpadeo); se vuelve a medir si cambia
+  // el ancho (fuentes, idioma).
+  const groupRef = useRef<HTMLDivElement>(null)
+  const btnRefs = useRef<Partial<Record<Interval, HTMLButtonElement | null>>>({})
+  const [ind, setInd] = useState<{ x: number; w: number } | null>(null)
+  const [indReady, setIndReady] = useState(false)
+  useLayoutEffect(() => {
+    const measure = () => {
+      const b = btnRefs.current[period]
+      if (b) setInd((prev) => (prev && prev.x === b.offsetLeft && prev.w === b.offsetWidth ? prev : { x: b.offsetLeft, w: b.offsetWidth }))
+    }
+    measure()
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (ro && groupRef.current) ro.observe(groupRef.current)
+    document.fonts?.ready.then(measure).catch(() => {})
+    return () => ro?.disconnect()
+  }, [period])
+  // La primera colocación va sin transición; a partir de ahí se desliza.
+  useEffect(() => {
+    if (!ind || indReady) return
+    const r = requestAnimationFrame(() => setIndReady(true))
+    return () => cancelAnimationFrame(r)
+  }, [ind, indReady])
 
   return (
     <div>
@@ -149,16 +184,34 @@ export function Pricing({ as: Heading = 'h2' }: { as?: 'h1' | 'h2' }) {
       </div>
 
       <div className="mt-8 flex justify-center">
-        <div role="group" aria-label={t('Billing period', 'Periodo de facturación')} className="inline-flex rounded-full border border-line bg-white p-1 shadow-[0_1px_2px_rgba(4,25,28,0.05)]">
+        <div
+          ref={groupRef}
+          role="group"
+          aria-label={t('Billing period', 'Periodo de facturación')}
+          className="relative inline-flex rounded-full border border-line bg-white p-1 shadow-[0_1px_2px_rgba(4,25,28,0.05)]"
+        >
+          {ind && (
+            <span
+              aria-hidden="true"
+              className={cx('absolute inset-y-1 left-0 rounded-full bg-deep', indReady && 'transition-[transform,width] duration-300 ease-[var(--p-ease)] motion-reduce:transition-none')}
+              style={{ width: ind.w, transform: `translateX(${ind.x}px)` }}
+            />
+          )}
           {(['month', 'year'] as const).map((p) => (
             <button
               key={p}
+              ref={(el) => {
+                btnRefs.current[p] = el
+              }}
               type="button"
               aria-pressed={period === p}
-              onClick={() => setPeriod(p)}
+              onClick={() => {
+                setPeriod(p)
+                if (p !== period) setChanged(true)
+              }}
               className={cx(
-                'h-8 rounded-full px-3.5 text-[12.5px] font-bold transition-colors sm:px-4',
-                period === p ? 'bg-deep text-white' : 'text-ink-2 hover:text-ink',
+                'relative z-10 h-8 rounded-full px-3.5 text-[12.5px] font-bold transition-colors duration-300 sm:px-4',
+                period === p ? cx('text-white', !ind && 'bg-deep') : 'text-ink-2 hover:text-ink',
               )}
             >
               {p === 'month' ? t('Monthly', 'Mensual') : yearlyLabel}
@@ -167,11 +220,16 @@ export function Pricing({ as: Heading = 'h2' }: { as?: 'h1' | 'h2' }) {
         </div>
       </div>
 
-      <div className="mx-auto mt-10 grid max-w-[1000px] grid-cols-1 gap-4 md:grid-cols-3">
-        {PAID_PLANS.map((id) => (
-          <PlanCard key={id} id={id} period={period} />
+      {/* Cada tarjeta aparece al verse ella misma (en móvil van una debajo de
+          otra); la rejilla solo para la franja del recomendado fuera de vista. */}
+      <Reveal reveal={false} live className="mx-auto mt-10 grid max-w-[1000px] grid-cols-1 gap-4 md:grid-cols-3">
+        {PAID_PLANS.map((id, n) => (
+          // En un envoltorio: .lift (la tarjeta) también usa transform.
+          <Reveal key={id} delay={n * 80}>
+            <PlanCard id={id} period={period} changed={changed} />
+          </Reveal>
         ))}
-      </div>
+      </Reveal>
 
       {/* Plan Agencia: a todo el ancho, con el mismo periodo que las tarjetas. */}
       <div className="mx-auto mt-6 max-w-[1000px]">

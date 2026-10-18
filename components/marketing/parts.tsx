@@ -78,14 +78,16 @@ export function BrandLink({ label, tone = 'light' }: { label: string; tone?: 'li
   )
 }
 
+// Botones en píldora. Si terminan en una flecha, la flecha se adelanta un poco
+// al pasar el ratón (en toda la web, sin tocar cada uso).
 export const pillWhite =
-  'inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-6 text-[15px] font-bold text-deep shadow-[0_12px_30px_-12px_rgba(4,25,28,0.45)] transition-colors hover:bg-[#ecfbf7]'
+  'inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-white px-6 text-[15px] font-bold text-deep shadow-[0_12px_30px_-12px_rgba(4,25,28,0.45)] transition-colors hover:bg-[#ecfbf7] [&>svg:last-child]:transition-transform [&>svg:last-child]:duration-200 hover:[&>svg:last-child]:translate-x-0.5'
 
 export const pillDark =
-  'inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-deep px-4 text-[14px] font-bold text-white transition-colors hover:bg-deep-2'
+  'inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-deep px-4 text-[14px] font-bold text-white transition-colors hover:bg-deep-2 [&>svg:last-child]:transition-transform [&>svg:last-child]:duration-200 hover:[&>svg:last-child]:translate-x-0.5'
 
 export const pillDarkLg =
-  'inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-deep px-6 text-[15px] font-bold text-white transition-colors hover:bg-deep-2 disabled:pointer-events-none disabled:opacity-60'
+  'inline-flex h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-deep px-6 text-[15px] font-bold text-white transition-colors hover:bg-deep-2 disabled:pointer-events-none disabled:opacity-60 [&>svg:last-child]:transition-transform [&>svg:last-child]:duration-200 hover:[&>svg:last-child]:translate-x-0.5'
 
 /** Fondo de página de la web pública. */
 export const PAGE_BG = '#f2f4f3'
@@ -160,7 +162,11 @@ export const PANELS = {
 
 export type PanelId = keyof typeof PANELS
 
-/** Puntos de plancton quietos sobre el degradado de la portada. */
+/**
+ * Puntos de plancton sobre el degradado de la portada: flotan y titilan despacio
+ * (cada uno a su ritmo), se paran fuera de vista y se quedan quietos con
+ * «reducir movimiento». Al bajar, la capa entera va más lenta que la página.
+ */
 const DOTS: [number, number, number, number][] = [
   // x %, y %, tamaño px, opacidad
   [6, 18, 3, 0.7],
@@ -185,20 +191,25 @@ const DOTS: [number, number, number, number][] = [
 
 export function Plankton() {
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+    <div aria-hidden="true" className="par-slow pointer-events-none absolute inset-0">
       {DOTS.map(([x, y, s, o], i) => (
         <span
           key={i}
-          className="absolute rounded-full"
-          style={{
-            left: `${x}%`,
-            top: `${y}%`,
-            width: s,
-            height: s,
-            opacity: o,
-            background: i % 3 === 0 ? '#bff8ea' : '#ffffff',
-            boxShadow: s >= 3 ? `0 0 ${s * 3}px rgba(255, 255, 255, 0.7)` : undefined,
-          }}
+          className="plk absolute rounded-full"
+          // La opacidad va en --o porque el titileo la hace respirar a partir de ese valor.
+          style={
+            {
+              left: `${x}%`,
+              top: `${y}%`,
+              width: s,
+              height: s,
+              '--o': o,
+              '--dur': `${9 + ((i * 7) % 9)}s`,
+              '--delay': `${(-i * 1.3).toFixed(1)}s`,
+              background: i % 3 === 0 ? '#bff8ea' : '#ffffff',
+              boxShadow: s >= 3 ? `0 0 ${s * 3}px rgba(255, 255, 255, 0.7)` : undefined,
+            } as React.CSSProperties
+          }
         />
       ))}
     </div>

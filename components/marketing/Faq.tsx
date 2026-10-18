@@ -3,14 +3,16 @@ import { IconChevron } from '@/components/icons'
 import { cx } from '@/components/ui'
 import { pick, type Lang } from '@/lib/i18n-shared'
 import type { FaqItem } from './faqData'
+import { Reveal } from './Reveal'
 
-// Acordeón de preguntas con <details>: accesible y sin JavaScript.
+// Acordeón de preguntas con <details>: accesible y sin JavaScript. Las filas
+// entran escalonadas al verse y la respuesta se abre suave (globals.css, .faq).
 
 export function Faq({ items, lang, className }: { items: FaqItem[]; lang: Lang; className?: string }) {
   return (
-    <div className={cx('divide-y divide-line overflow-hidden rounded-[24px] border border-line bg-white', className)}>
-      {items.map((item) => (
-        <details key={item.id} id={`q-${item.id}`} className="group scroll-mt-28">
+    <Reveal className={cx('faq divide-y divide-line overflow-hidden rounded-[24px] border border-line bg-white', className)}>
+      {items.map((item, i) => (
+        <details key={item.id} id={`q-${item.id}`} className="rv group scroll-mt-28" style={{ '--i': Math.min(i, 6) } as React.CSSProperties}>
           <summary className="flex items-center justify-between gap-4 px-5 py-5 text-left transition-colors hover:bg-bg sm:px-7">
             <span className="text-[16px] font-bold leading-snug tracking-[-0.01em] text-ink">{pick(item.q, lang)}</span>
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-line-2 text-ink-2 transition-transform group-open:rotate-180">
@@ -31,7 +33,7 @@ export function Faq({ items, lang, className }: { items: FaqItem[]; lang: Lang; 
           </div>
         </details>
       ))}
-    </div>
+    </Reveal>
   )
 }
 

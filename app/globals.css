@@ -484,3 +484,216 @@ details > summary::-webkit-details-marker {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Animaciones de la landing */
+/* ───────────── Web pública: movimiento ─────────────
+   Las apariciones van una sola vez: <Reveal> (components/marketing/Reveal.tsx)
+   pone data-reveal="wait" a lo que todavía no se ve y "in" al verlo; lo que ya
+   está en pantalla al cargar se queda como está. Los bucles se paran fuera de
+   vista (data-live="off"). Sin JavaScript o con «reducir movimiento» nunca se
+   oculta nada y todo queda en su estado final. */
+/* Curva de la web pública. No se llama --ease-out porque Tailwind v4 ya usa ese
+   nombre para su utilidad ease-out (la del panel), con otro valor. */
+:root {
+  --p-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes p-drift {
+  0%, 100% { translate: 0 0; }
+  25% { translate: 6px -7px; }
+  50% { translate: 0 -14px; }
+  75% { translate: -6px -7px; }
+}
+
+/* Retardo base (--anim-base) para lo que vive dentro de un fragmento que entra.
+   Vale 0 por defecto: el panel no cambia. */
+.anim-rise { animation-delay: calc(var(--anim-base, 0ms) + var(--i, 0) * 70ms); }
+.anim-grow-y,
+.anim-grow-x { animation-delay: calc(var(--anim-base, 0ms) + 120ms + var(--i, 0) * 60ms); }
+.anim-draw { animation-delay: calc(var(--anim-base, 0ms) + 150ms + var(--i, 0) * 80ms); }
+.sheen::after { animation-delay: calc(var(--anim-base, 0ms) + 0.5s); }
+
+/* Aparición al verse */
+[data-reveal="wait"] { opacity: 0; transform: translateY(16px); }
+[data-reveal="in"] {
+  transition: opacity 0.6s ease, transform 0.7s var(--p-ease);
+  transition-delay: var(--rv-delay, 0ms);
+}
+[data-reveal="wait"] .rv { opacity: 0; transform: translateY(12px); }
+[data-reveal="wait"] .rv-r { opacity: 0; transform: translate(28px, 20px); }
+[data-reveal="wait"] .rv-left { opacity: 0; transform: translateX(-40px); }
+[data-reveal="wait"] .rv-right { opacity: 0; transform: translateX(40px); }
+[data-reveal="wait"] .rv-up { opacity: 0; transform: translateY(40px); }
+/* Un fragmento con su propio <Reveal> (anidado) que aún espera a verse
+   conserva su entrada desde el corte aunque el bloque ya haya entrado. */
+[data-reveal="wait"].rv-r { opacity: 0; transform: translate(28px, 20px); }
+/* Títulos por líneas: desde sm sube cada línea; en móvil las líneas van
+   seguidas como texto corrido y sube el título entero. */
+@media (width < 40rem) {
+  [data-reveal="wait"] .rv-title { opacity: 0; transform: translateY(12px); }
+}
+@media (width >= 40rem) {
+  [data-reveal="wait"] .rv-line { opacity: 0; transform: translateY(12px); }
+}
+[data-reveal="in"] :is(.rv, .rv-r, .rv-left, .rv-right, .rv-up, .rv-title, .rv-line) {
+  transition: opacity 0.6s ease, transform 0.7s var(--p-ease);
+  transition-delay: calc(var(--rv-base, 0ms) + var(--i, 0) * 80ms);
+}
+/* Lo animado de dentro espera a verse: sin nombre de animación mientras está
+   oculto, y al aparecer el nombre vuelve y la animación empieza de cero. */
+[data-reveal="wait"] [class*="anim-"],
+[data-reveal="wait"] .sheen::after { animation-name: none; }
+
+/* Bucles parados fuera de vista */
+[data-live="off"] :is(.sea-ray, .plk, .pl-track, .sea-swell, .panel-drift, .plan-strip, .tab-progress),
+[data-live="off"] .hero-ping::after { animation-play-state: paused; }
+[data-live="on"] .panel-drift { will-change: transform; }
+
+@keyframes p-rise-soft { from { transform: translateY(12px); } }
+@keyframes p-settle-in { from { transform: translateY(12px) scale(0.985); } }
+@keyframes p-ring { from { stroke-dashoffset: 100; } }
+@keyframes p-pop { from { opacity: 0; transform: scale(0.8); } }
+@keyframes p-twinkle { 50% { opacity: calc(var(--o, 0.5) * 0.55); } }
+@keyframes p-ping-seq {
+  0% { opacity: 0; transform: scale(0.7); }
+  4% { opacity: 0.9; }
+  18%, 100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes p-swell { to { transform: translateY(3px); } }
+@keyframes p-swap { from { opacity: 0; transform: translateY(6px); } }
+@keyframes p-swap-up { from { transform: translateY(100%); } }
+@keyframes p-swap-down { from { transform: translateY(-100%); } }
+@keyframes p-tuck { from { opacity: 0; transform: translateY(-16px); } }
+@keyframes p-out { to { opacity: 0; } }
+@keyframes p-panel-drift { to { transform: scale(1.05) translate(2%, 1%); } }
+@keyframes p-strip { to { transform: translateX(-50%); } }
+@keyframes p-caret { 50% { opacity: 0; } }
+@keyframes p-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* Siempre opacos (no retrasan el LCP): solo se mueven */
+.anim-rise-soft { animation: p-rise-soft 0.7s var(--p-ease) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.anim-settle-in { animation: p-settle-in 0.8s var(--p-ease) 0.2s both; }
+/* Anillos que se dibujan (pathLength="100") */
+.anim-ring { animation: p-ring 1.1s var(--p-ease) both; animation-delay: calc(var(--anim-base, 0ms) + 150ms + var(--i, 0) * 80ms); }
+.anim-pop { animation: p-pop 0.32s var(--p-ease) both; animation-delay: calc(var(--anim-base, 0ms) + var(--i, 0) * 60ms); }
+.anim-swap { animation: p-swap 0.25s var(--p-ease) both; }
+.anim-swap-up { animation: p-swap-up 0.6s var(--p-ease) calc(var(--anim-base, 0ms) + 900ms) both; }
+.anim-swap-down { animation: p-swap-down 0.6s var(--p-ease) calc(var(--anim-base, 0ms) + 900ms) both; }
+.anim-tuck { animation: p-tuck 0.5s var(--p-ease) calc(var(--anim-base, 0ms) + 250ms) both; }
+.anim-out { animation: p-out 0.2s ease calc(var(--anim-base, 0ms) + var(--i, 0) * 180ms) forwards; }
+/* Rueda de «comprobando» que se para sola (4 vueltas) */
+.anim-spin { animation: p-spin 0.9s linear 4; }
+
+/* Cursor de lo que se escribe: no ocupa sitio, así el texto no se mueve */
+.typed-caret { position: relative; }
+.typed-caret::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 0.05em;
+  bottom: 0.05em;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--color-ink);
+  animation: p-caret 1s steps(1) infinite;
+}
+
+/* Portada: plancton que flota, ping que recorre las IA y oleaje */
+.plk {
+  opacity: var(--o, 0.5);
+  animation:
+    p-drift var(--dur, 12s) ease-in-out infinite,
+    p-twinkle calc(var(--dur, 12s) * 0.6) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.hero-ping { position: relative; }
+.hero-ping::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-brand-2);
+  opacity: 0;
+  pointer-events: none;
+  animation: p-ping-seq 4.5s ease-out infinite;
+  animation-delay: calc(1.4s + var(--i, 0) * 0.9s);
+}
+.sea-swell { animation: p-swell 9s ease-in-out infinite alternate; }
+/* Fondo de los bloques de funciones que respira */
+.panel-drift { animation: p-panel-drift 18s ease-in-out infinite alternate; }
+/* Franja del plan recomendado */
+.plan-strip { animation: p-strip 8s ease-in-out infinite alternate; }
+/* Subrayado de la pestaña activa: cuánto falta para la siguiente */
+.tab-progress { animation: p-progress var(--dur, 7s) linear both; }
+
+/* Paralaje ligado al scroll (solo donde existe; en el resto, quieto) */
+@keyframes p-par { to { transform: translateY(270px); } }
+@keyframes p-settle { from { transform: translateY(24px) scale(0.97); } }
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .par-slow {
+      animation: p-par auto linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0px 900px;
+    }
+    .hero-settle {
+      animation: p-settle auto linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 100%;
+    }
+  }
+}
+
+/* Preguntas frecuentes: la respuesta entra suave y la altura se anima donde se puede */
+@media (prefers-reduced-motion: no-preference) {
+  .faq details[open] > div { animation: p-rise 0.35s var(--p-ease); }
+}
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .faq { interpolate-size: allow-keywords; }
+    .faq details::details-content {
+      height: 0;
+      overflow: clip;
+      transition: height 0.35s var(--p-ease), content-visibility 0.35s allow-discrete;
+    }
+    .faq details[open]::details-content { height: auto; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .anim-rise-soft,
+  .anim-settle-in,
+  .anim-ring,
+  .anim-pop,
+  .anim-swap,
+  .anim-swap-up,
+  .anim-swap-down,
+  .anim-tuck,
+  .anim-out,
+  .anim-spin,
+  .plk,
+  .sea-swell,
+  .panel-drift,
+  .plan-strip,
+  .tab-progress,
+  .hero-ping::after {
+    animation: none !important;
+  }
+  /* Lo que se va al final de su animación (la rueda de «comprobando») ni se pinta */
+  .anim-out { display: none; }
+  .typed-caret::after { display: none; }
+}
+
+/* En pantallas táctiles, las tarjetas de precios no se quedan levantadas tras tocarlas */
+@media (hover: none) {
+  [data-reveal] .lift:hover { transform: none; }
+}
+
+/* Al imprimir, todo a la vista aunque no se haya llegado a ver en pantalla */
+@media print {
+  [data-reveal],
+  [data-reveal] :is(.rv, .rv-r, .rv-left, .rv-right, .rv-up, .rv-title, .rv-line) {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -8,10 +8,12 @@ import { TRIAL_DAYS } from '@/lib/plans'
 import { shotSrc } from './HeroShot'
 import { CookieSettingsButton } from './Analytics'
 import { BrandLink, Container, pillWhite } from './parts'
+import { Reveal } from './Reveal'
 
 // Pie: bloque oscuro con las esquinas de arriba redondeadas. Dentro, una tarjeta
 // con el degradado del mar (texto y botón a la izquierda, la captura del panel
-// asomando a la derecha); debajo, logo, enlaces y la línea legal.
+// asomando a la derecha); debajo, logo, enlaces y la línea legal. Al verse,
+// la tarjeta entra y la captura sube desde el borde.
 
 const CTA_BG: React.CSSProperties = {
   backgroundColor: '#2a78d6',
@@ -36,7 +38,7 @@ export async function SiteFooter() {
   return (
     <footer className="mt-8 rounded-t-[28px] bg-deep text-white sm:rounded-t-[44px]">
       <Container wide className="pt-10 sm:pt-16">
-        <div className="relative grid grid-cols-1 overflow-hidden rounded-[22px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]" style={CTA_BG}>
+        <Reveal className="relative grid grid-cols-1 overflow-hidden rounded-[22px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]" style={CTA_BG}>
           <div className="relative z-10 px-7 py-10 sm:px-12 sm:py-14 lg:py-20">
             <h2 className="max-w-md text-balance text-[30px] font-extrabold leading-[1.06] tracking-[-0.04em] sm:text-[44px]">
               {t('Find out what AI tells your customers about you', 'Descubre qué le cuenta la IA a tus clientes sobre ti')}
@@ -53,7 +55,7 @@ export async function SiteFooter() {
             </Link>
           </div>
           {/* La captura sale por la derecha y por abajo, recortada por la tarjeta */}
-          <div aria-hidden="true" className="relative h-[230px] sm:h-[320px] lg:h-auto">
+          <div aria-hidden="true" className="rv-up relative h-[230px] sm:h-[320px] lg:h-auto" style={{ '--i': 2 } as React.CSSProperties}>
             <Image
               src={shotSrc(lang)}
               alt=""
@@ -63,7 +65,7 @@ export async function SiteFooter() {
               className="absolute left-7 top-0 w-[560px] max-w-none rounded-[12px] shadow-[0_30px_70px_-25px_rgba(4,25,28,0.6)] ring-1 ring-white/30 sm:left-12 lg:left-0 lg:top-16 lg:w-[720px]"
             />
           </div>
-        </div>
+        </Reveal>
 
         <div className="flex flex-col gap-6 py-10 md:flex-row md:items-center md:justify-between">
           <BrandLink tone="dark" label={t('Placton home', 'Placton, inicio')} />

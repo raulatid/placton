@@ -12,14 +12,15 @@ import {
   IconTeam,
   IconTrend,
 } from '@/components/icons'
-import { PLATFORM_META } from '@/components/ui'
+import { PLATFORM_META, cx } from '@/components/ui'
 import { makeT, type Lang } from '@/lib/i18n-shared'
 import { Container } from './parts'
 import { PlatformLogo, platformName } from './PlatformLogo'
+import { Reveal } from './Reveal'
 
 // Dos filas de etiquetas que se desplazan en bucle, en sentidos opuestos. Se
-// paran al pasar el ratón y se quedan quietas si la persona pide menos
-// movimiento en su sistema.
+// paran al pasar el ratón y fuera de vista, y se quedan quietas si la persona
+// pide menos movimiento en su sistema. Al verse, cada fila entra por su lado.
 
 type Chip = { key: string; label: string; color: string; Icon?: (p: { size?: number; className?: string }) => React.ReactNode; platform?: string }
 
@@ -39,12 +40,14 @@ const MARQUEE_CSS = `
 
 function ChipView({ chip }: { chip: Chip }) {
   return (
-    <li className="inline-flex h-12 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full border border-line bg-white pl-2 pr-5 text-[14.5px] font-semibold text-ink-2 shadow-[0_6px_20px_-14px_rgba(4,25,28,0.35)]">
+    <li className="inline-flex h-12 shrink-0 items-center gap-2.5 whitespace-nowrap rounded-full border border-line bg-white pl-2 pr-5 text-[14.5px] font-semibold text-ink-2 shadow-[0_6px_20px_-14px_rgba(4,25,28,0.35)] transition-[translate,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-faint hover:shadow-[0_8px_18px_-12px_rgba(4,25,28,0.4)]">
       {chip.platform ? (
         <PlatformLogo id={chip.platform} size={30} decorative />
       ) : (
-        <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full" style={{ background: `${chip.color}1f`, color: chip.color }}>
+        // Icono en tinta sobre gris; el color de la función va en un punto.
+        <span className="relative flex h-[30px] w-[30px] items-center justify-center rounded-full bg-line-2 text-ink-2">
           {chip.Icon && <chip.Icon size={16} />}
+          <span aria-hidden="true" className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full ring-2 ring-white" style={{ background: chip.color }} />
         </span>
       )}
       {chip.label}
@@ -52,9 +55,9 @@ function ChipView({ chip }: { chip: Chip }) {
   )
 }
 
-function Row({ chips, reverse = false, duration }: { chips: Chip[]; reverse?: boolean; duration: number }) {
+function Row({ chips, reverse = false, duration, className, i = 0 }: { chips: Chip[]; reverse?: boolean; duration: number; className?: string; i?: number }) {
   return (
-    <div className="pl-marquee overflow-hidden py-1.5">
+    <div className={cx('pl-marquee overflow-hidden py-1.5', className)} style={{ '--i': i } as React.CSSProperties}>
       <div className="pl-track flex w-max" data-dir={reverse ? 'reverse' : 'normal'} style={{ '--pl-dur': `${duration}s` } as React.CSSProperties}>
         <ul data-copy="1" className="flex gap-3 pr-3">
           {chips.map((c) => (
@@ -112,10 +115,10 @@ export function ToolsMarquee({ lang }: { lang: Lang }) {
           )}
         </p>
       </Container>
-      <div className="mt-12 space-y-2 sm:mt-14">
-        <Row chips={rowA} duration={52} />
-        <Row chips={rowB} duration={58} reverse />
-      </div>
+      <Reveal live className="mt-12 space-y-2 sm:mt-14">
+        <Row chips={rowA} duration={52} className="rv-left" />
+        <Row chips={rowB} duration={58} reverse className="rv-right" i={1} />
+      </Reveal>
     </section>
   )
 }

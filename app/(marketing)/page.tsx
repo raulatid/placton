@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { AnswerDemo } from '@/components/marketing/AnswerDemo'
 import { AuditCta } from '@/components/marketing/AuditCta'
 import { Faq } from '@/components/marketing/Faq'
 import { HOME_FAQ, faqByIds } from '@/components/marketing/faqData'
@@ -8,6 +9,7 @@ import { Container, Plankton, pillWhite } from '@/components/marketing/parts'
 import { PlatformLogo } from '@/components/marketing/PlatformLogo'
 import { Pricing } from '@/components/marketing/Pricing'
 import { HeroShot } from '@/components/marketing/HeroShot'
+import { Reveal } from '@/components/marketing/Reveal'
 import { SeaRays, SeaSurface } from '@/components/marketing/SeaScene'
 import { ToolsMarquee } from '@/components/marketing/ToolsMarquee'
 import { IconArrow } from '@/components/icons'
@@ -85,8 +87,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         </div>
       )}
       {/* Portada + vista del producto sobre un mismo fondo: el degradado sigue por
-          detrás de la ventana y se funde con la página, sin cortes. */}
-      <div className="relative">
+          detrás de la ventana y se funde con la página, sin cortes. Sus bucles
+          (rayos, plancton, oleaje, ping) se paran cuando sale de la vista. */}
+      <Reveal reveal={false} live className="relative">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden" style={HERO_FADE}>
           <SeaRays />
           <Plankton />
@@ -95,8 +98,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         {/* Por encima del mar: la píldora de plataformas queda sobre el horizonte */}
         <section className="relative z-20">
           <Container className="relative pb-14 pt-36 text-center sm:pb-16 sm:pt-44 lg:pb-20 lg:pt-48">
+            {/* Siempre opaco (no retrasa el LCP): solo sube un poco al cargar */}
             <h1
-              className="anim-rise mx-auto max-w-4xl text-balance text-[42px] font-extrabold leading-[1.02] tracking-[-0.05em] text-white sm:text-[64px] lg:text-[80px]"
+              className="anim-rise-soft mx-auto max-w-4xl text-balance text-[42px] font-extrabold leading-[1.02] tracking-[-0.05em] text-white sm:text-[64px] lg:text-[80px]"
               style={{ '--i': 0, textShadow: '0 2px 30px rgba(4, 25, 28, 0.22)' } as React.CSSProperties}
             >
               {lang === 'es' ? (
@@ -128,11 +132,20 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               </p>
             </div>
             <div className="anim-rise mt-9 flex justify-center" style={{ '--i': 3 } as React.CSSProperties}>
-              <p className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-[22px] border border-white/70 bg-white/75 px-4 py-2 text-[13.5px] font-semibold text-ink-2 shadow-[0_10px_30px_-18px_rgba(4,25,28,0.45)] backdrop-blur-md sm:rounded-full sm:px-5">
+              {/* Los logos entran uno a uno y luego un anillo los recorre en orden,
+                  como Placton preguntando a cada IA. */}
+              <p
+                className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-[22px] border border-white/70 bg-white/75 px-4 py-2 text-[13.5px] font-semibold text-ink-2 shadow-[0_10px_30px_-18px_rgba(4,25,28,0.45)] backdrop-blur-md sm:rounded-full sm:px-5"
+                style={{ '--anim-base': '350ms' } as React.CSSProperties}
+              >
                 <span className="mr-0.5 text-mute">{t('Tracks', 'Mide')}</span>
-                {HERO_PLATFORMS.map((p) => (
+                {HERO_PLATFORMS.map((p, i) => (
                   <span key={p.id} className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                    <PlatformLogo id={p.id} size={22} decorative />
+                    <span className="hero-ping inline-flex rounded-full" style={{ '--i': i } as React.CSSProperties}>
+                      <span className="anim-pop inline-flex">
+                        <PlatformLogo id={p.id} size={22} decorative />
+                      </span>
+                    </span>
                     {p.name}
                   </span>
                 ))}
@@ -145,17 +158,18 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         <div className="relative z-10">
           <SeaSurface />
           <Container wide className="relative">
-            <div className="anim-rise" style={{ '--i': 4 } as React.CSSProperties}>
+            {/* Opaca desde el primer momento (es el LCP): solo se asienta */}
+            <div className="anim-settle-in">
               <HeroShot lang={lang} />
             </div>
           </Container>
         </div>
-      </div>
+      </Reveal>
 
-      {/* Declaración */}
+      {/* Declaración y, al lado, una respuesta de IA que se escribe en directo */}
       <section aria-label={t('About Placton', 'Sobre Placton')} className="py-20 sm:py-32">
-        <Container>
-          <p className="max-w-4xl text-pretty text-[24px] font-bold leading-[1.3] tracking-[-0.025em] sm:text-[32px]">
+        <Container className="grid gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-16">
+          <Reveal as="p" className="max-w-4xl text-pretty text-[24px] font-bold leading-[1.3] tracking-[-0.025em] sm:text-[32px] lg:text-[30px]">
             <span className="text-ink">
               {t(
                 'AI assistants are quickly becoming the place where people discover brands.',
@@ -168,7 +182,10 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                 'Cuando alguien pide un producto, un servicio o un proveedor, recibe una respuesta corta con unos pocos nombres y, si el tuyo no está, nunca te enteras. Placton te enseña dónde aparece tu marca, cómo quedas frente a tus rivales y qué hacer para salir más a menudo.',
               )}
             </span>
-          </p>
+          </Reveal>
+          <Reveal delay={80}>
+            <AnswerDemo lang={lang} />
+          </Reveal>
         </Container>
       </section>
 
