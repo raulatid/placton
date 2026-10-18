@@ -103,12 +103,13 @@ export function lastMonths(n = 12): { key: string; label: string; from: string; 
 
 /** Espacios que pagan ellos mismos (no los clientes de una agencia). */
 function payerSpaces(spaces: Workspace[]): Workspace[] {
-  return spaces.filter((w) => w.plan !== 'trial' && (!w.billingOwnerId || w.billingOwnerId === w.id) && (w.status === 'active' || w.status === 'past_due'))
+  return spaces.filter((w) => w.plan !== 'trial' && !w.manualPlan && (!w.billingOwnerId || w.billingOwnerId === w.id) && (w.status === 'active' || w.status === 'past_due'))
 }
 
 /** Cuota mensual de un espacio según su plan (si Stripe no está disponible). */
 export function localMonthly(w: Workspace): number {
-  if (w.plan === 'trial') return 0
+  // Los planes dados a mano no se cobran.
+  if (w.plan === 'trial' || w.manualPlan) return 0
   if (w.plan === 'agencia') return agencyQuote(w.seats, w.promptPool, w.billingInterval).perMonth
   return monthlyEquivalent(w.plan as Exclude<PaidPlanId, 'agencia'>, w.billingInterval)
 }
@@ -322,7 +323,7 @@ export function buildReport(p: Period, ext: { stripe: StripeData | null; openrou
     if (w) ownedBy.set(o.userId, [...(ownedBy.get(o.userId) ?? []), w])
   }
   const measured = new Set(all<{ workspaceId: number }>('SELECT DISTINCT workspaceId FROM answers').map((r) => r.workspaceId))
-  const isPaid = (w: Workspace) => w.plan !== 'trial' && !w.billingOwnerId
+  const isPaid = (w: Workspace) => w.plan !== 'trial' && !w.billingOwnerId && !w.manualPlan
   const everPaid = new Set(S ? S.subs.filter((s) => s.status !== 'incomplete' && s.status !== 'incomplete_expired').map((s) => s.workspaceId).filter((x): x is number => x !== null) : [])
   const userState = (uid: number) => {
     const ws = ownedBy.get(uid) ?? []
@@ -547,7 +548,7 @@ export function buildReport(p: Period, ext: { stripe: StripeData | null; openrou
         owner: ownerEmail.get(w.id) ?? '',
         plan: w.plan,
         interval: w.billingInterval,
-        status: trial ? (repo.accessOf(w).ok ? 'prueba' : 'prueba terminada') : w.status,
+        status: trial ? (repo.accessOf(w).ok ? 'prueba' : 'prueba terminada') : w.manualPlan ? (repo.accessOf(w).ok ? 'a mano' : 'a mano, terminado') : w.status,
         monthly,
         api30,
         margin: monthly > 0 ? (monthly - api30 - (monthly * 0.05 + 0.3)) / monthly : null,

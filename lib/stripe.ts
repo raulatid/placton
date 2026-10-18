@@ -408,6 +408,8 @@ export function syncSubscription(sub: Stripe.Subscription): Workspace | null {
   const interval = (item?.price?.recurring?.interval === 'year' ? 'year' : 'month') as Interval
   const status = mapStatus(sub.status)
   if (!status) return ws
+  // Un plan dado a mano solo lo sustituye una suscripción que cobra; avisos viejos no lo tocan.
+  if (ws.manualPlan && status !== 'active') return ws
 
   // Dos suscripciones vivas para el mismo espacio: se avisa para devolver la sobrante.
   if (ws.stripeSubscriptionId && ws.stripeSubscriptionId !== sub.id && status === 'active' && (ws.status === 'active' || ws.status === 'past_due')) {
@@ -426,6 +428,8 @@ export function syncSubscription(sub: Stripe.Subscription): Workspace | null {
     promptPool: plan === 'agencia' ? Math.max(0, promptItem?.quantity ?? 0) : 0,
     pastDueSince: status === 'past_due' ? (ws.status === 'past_due' && ws.pastDueSince ? ws.pastDueSince : new Date().toISOString()) : null,
   })
+  // Empieza a pagar: deja de ser un plan dado a mano.
+  if (ws.manualPlan && status === 'active') repo.clearManualPlan(ws.id)
   return repo.workspaceById(ws.id)
 }
 

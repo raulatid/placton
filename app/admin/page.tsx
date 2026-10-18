@@ -86,6 +86,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <Link href={href({ fresh: '1' })} className="rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-faint hover:text-ink" scroll={false}>
               Actualizar
             </Link>
+            <Link href="/admin/planes" className="rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-faint hover:text-ink">
+              Planes a mano
+            </Link>
             <Link href="/admin/outreach" className="rounded-full border border-line bg-white px-3.5 py-1.5 text-[13px] font-semibold text-ink-2 transition-colors hover:border-faint hover:text-ink">
               Campaña de correo
             </Link>

@@ -83,7 +83,9 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
                 <dd className="font-bold num">
                   {ws.plan === 'trial'
                     ? t('Free', 'Gratis')
-                    : `${euros(agency ? agencyPrice : priceFor(ws.plan, ws.billingInterval), lang)}/${ws.billingInterval === 'year' ? t('year', 'año') : t('month', 'mes')}`}
+                    : ws.manualPlan
+                      ? t('Included by Placton', 'Incluido por Placton')
+                      : `${euros(agency ? agencyPrice : priceFor(ws.plan, ws.billingInterval), lang)}/${ws.billingInterval === 'year' ? t('year', 'año') : t('month', 'mes')}`}
                 </dd>
               </div>
               <div>
@@ -106,7 +108,19 @@ export default async function SubscriptionPage({ searchParams }: { searchParams:
                 </div>
               )}
             </dl>
-            {ws.plan !== 'trial' && ws.currentPeriodEnd && (
+            {ws.manualPlan && (
+              <p className="text-sm text-ink-2">
+                {ws.manualUntil ? (
+                  <>
+                    {t('Your plan is included until ', 'Tu plan está incluido hasta el ')}
+                    <strong>{fmtDate(ws.manualUntil, lang)}</strong>.
+                  </>
+                ) : (
+                  t('Your plan is included by Placton, with no end date.', 'Tu plan lo incluye Placton, sin fecha de fin.')
+                )}
+              </p>
+            )}
+            {ws.plan !== 'trial' && !ws.manualPlan && ws.currentPeriodEnd && (
               <p className="text-sm text-ink-2">
                 {ws.cancelAtPeriodEnd ? t('Your plan ends on ', 'Tu plan termina el ') : t('Next renewal: ', 'Próxima renovación: ')}
                 <strong>{fmtDate(ws.currentPeriodEnd, lang)}</strong>.

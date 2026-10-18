@@ -1,6 +1,6 @@
 import { all, jsonList, nowIso, one, run, tx } from './db'
 import { key, domainKey } from './norm'
-import { PLANS, TRIAL_DAYS, type Interval, type PlanId } from './plans'
+import { PLANS, TRIAL_DAYS, type Interval, type PaidPlanId, type PlanId } from './plans'
 import type {
   Competitor,
   Invite,
@@ -131,11 +131,12 @@ export function deleteUser(userId: number): { deletedWorkspaces: number[]; strip
 
 /* ───────────── Espacios ───────────── */
 
-interface WorkspaceRow extends Omit<Workspace, 'aliases' | 'engines' | 'onboarded' | 'cancelAtPeriodEnd'> {
+interface WorkspaceRow extends Omit<Workspace, 'aliases' | 'engines' | 'onboarded' | 'cancelAtPeriodEnd' | 'manualPlan'> {
   aliases: string
   engines: string
   onboarded: number
   cancelAtPeriodEnd: number
+  manualPlan?: number
 }
 
 function toWorkspace(r: WorkspaceRow | null): Workspace | null {
@@ -146,6 +147,7 @@ function toWorkspace(r: WorkspaceRow | null): Workspace | null {
     engines: jsonList(r.engines),
     onboarded: Boolean(r.onboarded),
     cancelAtPeriodEnd: Boolean(r.cancelAtPeriodEnd),
+    manualPlan: Boolean(r.manualPlan),
   }
 }
 
@@ -247,6 +249,11 @@ export function accessOf(ws: Workspace): { ok: boolean; reason: 'trial' | 'activ
   if (ws.plan === 'trial') {
     const live = ws.trialEndsAt && new Date(ws.trialEndsAt).getTime() > Date.now()
     return live ? { ok: true, reason: 'trial' } : { ok: false, reason: 'trial_ended' }
+  }
+  // Plan dado a mano: vale mientras no llegue su fecha de fin (si la tiene).
+  if (ws.manualPlan) {
+    const live = ws.status === 'active' && (!ws.manualUntil || new Date(ws.manualUntil).getTime() > Date.now())
+    return live ? { ok: true, reason: 'active' } : { ok: false, reason: 'canceled' }
   }
   if (ws.status === 'active' || ws.status === 'trialing') return { ok: true, reason: 'active' }
   // Un impago deja 14 días de gracia mientras Stripe reintenta el cobro; después, se corta.
@@ -578,4 +585,37 @@ export function saveContact(input: { name: string; email: string; topic: string;
     input.userId,
     nowIso(),
   ])
+}
+
+/* ───────────── Planes dados a mano (administración) ───────────── */
+
+/** Da un plan sin pasar por Stripe. Sin fecha de fin, dura hasta que se quite. */
+export function grantManualPlan(id: number, input: { plan: PaidPlanId; until: string | null; seats: number; prompts: number; note: string }): string | null {
+  const ws = workspaceById(id)
+  if (!ws) return 'Ese espacio no existe.'
+  if (ws.billingOwnerId && ws.billingOwnerId !== ws.id) return 'Es un cliente de una agencia: su plan es el de la agencia que lo paga.'
+  if (ws.stripeSubscriptionId && !ws.manualPlan && ['active', 'past_due', 'trialing'].includes(ws.status)) {
+    return 'Tiene una suscripción de pago en Stripe. Cancélala antes de darle un plan a mano.'
+  }
+  const agency = input.plan === 'agencia'
+  run(
+    `UPDATE workspaces SET plan = ?, billingInterval = 'month', status = 'active', currentPeriodEnd = ?, cancelAtPeriodEnd = ?, seats = ?, promptPool = ?,
+       pastDueSince = NULL, manualPlan = 1, manualUntil = ?, manualNote = ? WHERE id = ?`,
+    [input.plan, input.until, input.until ? 1 : 0, agency ? Math.max(1, input.seats) : 1, agency ? Math.max(0, input.prompts) : 0, input.until, input.note.slice(0, 300), id],
+  )
+  return null
+}
+
+/** Quita el plan dado a mano: el espacio vuelve a la prueba (terminada si ya pasó) y elige plan. */
+export function revokeManualPlan(id: number) {
+  run(
+    `UPDATE workspaces SET plan = 'trial', status = 'canceled', currentPeriodEnd = NULL, cancelAtPeriodEnd = 0, seats = 1, promptPool = 0,
+       manualPlan = 0, manualUntil = NULL WHERE id = ? AND manualPlan = 1`,
+    [id],
+  )
+}
+
+/** Al empezar a pagar con Stripe deja de ser un plan dado a mano. */
+export function clearManualPlan(id: number) {
+  run('UPDATE workspaces SET manualPlan = 0, manualUntil = NULL WHERE id = ?', [id])
 }

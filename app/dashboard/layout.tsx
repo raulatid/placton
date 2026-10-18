@@ -35,6 +35,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     plan = { label: planLabel, detail: t('Payment pending', 'Pago pendiente'), cta: t('Review payment', 'Revisar pago'), warn: true }
   } else if (!access.ok) {
     plan = { label: t('Subscription canceled', 'Suscripción cancelada'), detail: t('Reactivate it to keep tracking', 'Reactívala para seguir midiendo'), cta: t('Reactivate', 'Reactivar'), warn: true }
+  } else if (ws.manualPlan) {
+    // Plan dado a mano por Placton: sin cobro, con o sin fecha de fin.
+    const until = ws.manualUntil ? new Date(ws.manualUntil).toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' }) : ''
+    plan = { label: planLabel, detail: until ? t(`Included until ${until}`, `Incluido hasta el ${until}`) : t('Included by Placton', 'Incluido por Placton'), cta: null, warn: false }
   } else {
     plan = {
       label: planLabel,

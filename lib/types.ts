@@ -45,6 +45,11 @@ export interface Workspace {
   pastDueSince?: string | null
   /** Logo subido por el cliente (si no, el icono de su web). */
   logoUpdatedAt?: string | null
+  /** Plan dado a mano desde la administración (no se cobra por Stripe). */
+  manualPlan?: boolean
+  /** Hasta cuándo dura el plan dado a mano (null = sin fecha de fin). */
+  manualUntil?: string | null
+  manualNote?: string | null
   createdBy: number | null
   createdAt: string
 }

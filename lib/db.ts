@@ -424,6 +424,10 @@ export function db(): DatabaseSync {
     'ALTER TABLE workspaces ADD COLUMN pastDueSince TEXT',
     // Prompts borrados: se archivan (su historial de respuestas se conserva).
     'ALTER TABLE prompts ADD COLUMN deletedAt TEXT',
+    // Planes dados a mano desde la administración (sin Stripe): marca, fin y nota.
+    'ALTER TABLE workspaces ADD COLUMN manualPlan INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE workspaces ADD COLUMN manualUntil TEXT',
+    'ALTER TABLE workspaces ADD COLUMN manualNote TEXT',
     // Campaña de correo: envío en curso, fallos por paso y reanudación de buzones.
     'ALTER TABLE outreach_contacts ADD COLUMN pendingAt TEXT',
     'ALTER TABLE outreach_contacts ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0',

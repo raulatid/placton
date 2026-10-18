@@ -34,6 +34,12 @@ export async function runLifecycle() {
     reportError(err, 'lifecycle:gasto')
   }
   try {
+    // Planes dados a mano cuya fecha de fin ya pasó: quedan cancelados.
+    run("UPDATE workspaces SET status = 'canceled' WHERE manualPlan = 1 AND status = 'active' AND manualUntil IS NOT NULL AND manualUntil < ?", [nowIso()])
+  } catch (err) {
+    reportError(err, 'lifecycle:planes a mano')
+  }
+  try {
     retention()
   } catch (err) {
     reportError(err, 'lifecycle:retención')
