@@ -14,12 +14,16 @@ export async function POST(req: NextRequest) {
   if (!secret || got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
-  const body = (await req.json().catch(() => ({}))) as { running?: boolean; resume?: string; warmupFrom?: { email: string; date: string } }
-  if (typeof body.running === 'boolean') saveSettings({ running: body.running })
-  if (body.resume) run('UPDATE outreach_mailboxes SET paused = 0, pausedReason = NULL, nextSendAt = NULL, resumedAt = ? WHERE email = ?', [nowIso(), body.resume])
-  if (body.warmupFrom && /^\d{4}-\d{2}-\d{2}$/.test(body.warmupFrom.date)) {
-    run('UPDATE outreach_mailboxes SET warmupFrom = ? WHERE email = ?', [`${body.warmupFrom.date}T00:00:00.000Z`, body.warmupFrom.email])
-  }
+  const raw = (await req.json().catch(() => null)) as Record<string, unknown> | null
+  const body = raw && typeof raw === 'object' ? raw : {}
+  // Todo se valida antes de cambiar nada.
+  const running = typeof body.running === 'boolean' ? body.running : undefined
+  const resume = typeof body.resume === 'string' ? body.resume : undefined
+  const w = body.warmupFrom as { email?: unknown; date?: unknown } | undefined
+  const warm = w && typeof w.email === 'string' && typeof w.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(w.date) ? { email: w.email, date: w.date } : undefined
+  if (running !== undefined) saveSettings({ running })
+  if (resume) run('UPDATE outreach_mailboxes SET paused = 0, pausedReason = NULL, nextSendAt = NULL, resumedAt = ? WHERE email = ?', [nowIso(), resume])
+  if (warm) run('UPDATE outreach_mailboxes SET warmupFrom = ? WHERE email = ?', [`${warm.date}T00:00:00.000Z`, warm.email])
   const s = settings()
   return NextResponse.json({
     running: s.running,

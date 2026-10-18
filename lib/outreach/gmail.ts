@@ -180,7 +180,7 @@ export async function getHeaders(box: Box, id: string): Promise<GmailHeaders> {
  * Mensajes recibidos (no enviados por el buzón) desde una fecha, los más nuevos primero.
  * También los de Spam y Papelera: una respuesta o una baja que cae ahí cuenta igual.
  */
-export async function listReceived(box: Box, sinceSec: number, max = 3000): Promise<{ id: string; threadId: string }[]> {
+export async function listReceived(box: Box, sinceSec: number, max = 20000): Promise<{ id: string; threadId: string }[]> {
   const out: { id: string; threadId: string }[] = []
   let pageToken: string | undefined
   do {

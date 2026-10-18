@@ -292,9 +292,10 @@ function nextContactFor(box: Mailbox, zones: string[], skip: number[]): Contact 
   const marks = zones.map(() => '?').join(',')
   const not = skip.length ? `AND id NOT IN (${skip.map(() => '?').join(',')})` : ''
   // Primero los seguimientos que ya tocan, de este buzón.
-  const follow = one<Contact>(`SELECT * FROM outreach_contacts WHERE status = 'active' AND mailbox = ? AND nextAt <= ? AND tz IN (${marks}) ${not} ORDER BY nextAt LIMIT 1`, [box.email, nowIso(), ...zones, ...skip])
+  // Un contacto con un envío en duda (pendingAt) solo lo toca recoverPending.
+  const follow = one<Contact>(`SELECT * FROM outreach_contacts WHERE status = 'active' AND mailbox = ? AND nextAt <= ? AND pendingAt IS NULL AND tz IN (${marks}) ${not} ORDER BY nextAt LIMIT 1`, [box.email, nowIso(), ...zones, ...skip])
   if (follow) return follow
-  return one<Contact>(`SELECT * FROM outreach_contacts WHERE status = 'pending' AND tz IN (${marks}) ${not} ORDER BY priority DESC, id LIMIT 1`, [...zones, ...skip])
+  return one<Contact>(`SELECT * FROM outreach_contacts WHERE status = 'pending' AND pendingAt IS NULL AND tz IN (${marks}) ${not} ORDER BY priority DESC, id LIMIT 1`, [...zones, ...skip])
 }
 
 /** Dominios que ya son usuarios o espacios de Placton: no se les escribe en frío. */
@@ -303,12 +304,12 @@ function isCustomerDomain(domain: string): boolean {
   return Boolean(one("SELECT 1 AS x FROM workspaces WHERE lower(domain) IN (?, ?) LIMIT 1", [domain, `www.${domain}`]))
 }
 
-function fill(text: string, box: Mailbox, c: Contact): string {
+function fill(text: string, box: Mailbox, c: Contact, test = false): string {
   const name = box.name || 'Raúl'
   return text
     .replaceAll('{{sender_name}}', name)
     .replaceAll('{{sender_first}}', name.split(' ')[0])
-    .replaceAll('{{unsubscribe_url}}', unsubUrl(c.id))
+    .replaceAll('{{unsubscribe_url}}', test ? `${siteUrl()}/api/u/ejemplo` : unsubUrl(c.id))
     .replaceAll('{{site}}', siteUrl().replace(/^https?:\/\//, ''))
 }
 
@@ -328,8 +329,11 @@ function recordSent(box: Mailbox, c: Contact, steps: Step[], subject: string, se
   const nextAt = next ? isoIn((next.wait ?? 3) * DAY_MS + rand(0, 4) * 3_600_000) : null
   tx(() => {
     run('INSERT INTO outreach_messages (contactId, mailbox, step, subject, gmailId, sentAt) VALUES (?, ?, ?, ?, ?, ?)', [c.id, box.email, c.step, subject, sent.id, now])
+    // Si mientras tanto respondió, se dio de baja o se registró, su estado se respeta.
+    const fin = "status IN ('replied', 'signed_up', 'unsubscribed', 'bounced', 'failed')"
     run(
-      `UPDATE outreach_contacts SET status = ?, step = step + 1, mailbox = ?, threadId = ?, messageIds = ?, subject = COALESCE(subject, ?), nextAt = ?, lastSentAt = ?, pendingAt = NULL, attempts = 0 WHERE id = ?`,
+      `UPDATE outreach_contacts SET status = CASE WHEN ${fin} THEN status ELSE ? END, step = step + 1, mailbox = ?, threadId = ?, messageIds = ?, subject = COALESCE(subject, ?),
+         nextAt = CASE WHEN ${fin} THEN NULL ELSE ? END, lastSentAt = ?, pendingAt = NULL, attempts = 0 WHERE id = ?`,
       [next ? 'active' : 'done', box.email, newThread ? sent.threadId : c.threadId, JSON.stringify((newThread ? [messageId] : [...refs, messageId]).filter(Boolean)), subject, nextAt, now, c.id],
     )
   })
@@ -351,8 +355,11 @@ async function fixMessageId(box: Mailbox, contactId: number, gmailId: string, ou
 /** Error de red o del servidor de Google: el correo pudo salir aunque no llegara la respuesta. */
 const ambiguous = (e: GmailError) => !e.status || e.status >= 500
 
+/** Buzones con mensajes recibidos aún sin leer (avalancha): no envían hasta ponerse al día. */
+const backlog = new Set<string>()
+
 /** Un envío: el siguiente paso de la secuencia del contacto desde este buzón. */
-export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to?: string } = {}): Promise<'sent' | 'skipped' | 'failed'> {
+export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to?: string } = {}): Promise<'sent' | 'skipped' | 'closed' | 'failed'> {
   const steps = jsonOr<Step[]>(c.steps, [])
   const step = steps[c.step]
   const test = Boolean(opts.to)
@@ -374,8 +381,8 @@ export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to
   const { newThread, subject } = stepInfo(c, step, test)
   const messageId = newMessageId(box.email)
   // Los textos importados no llevan pie: se añade aquí, el mismo para todos.
-  const text = fill(step.body, box, c).trim()
-  const footer = fill(s.footer, box, c).trim()
+  const text = fill(step.body, box, c, test).trim()
+  const footer = fill(s.footer, box, c, test).trim()
   const raw = buildMessage({
     fromName: box.name,
     fromEmail: box.email,
@@ -385,8 +392,9 @@ export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to
     html: htmlBody(text, footer),
     messageId,
     references: newThread ? [] : refs,
-    unsubscribeUrl: s.listUnsubscribe ? unsubUrl(c.id) : undefined,
-    unsubscribeToken: unsubToken(c.id),
+    // En las pruebas, nada que dé de baja a un contacto real si se pulsa.
+    unsubscribeUrl: s.listUnsubscribe && !test ? unsubUrl(c.id) : undefined,
+    unsubscribeToken: test ? undefined : unsubToken(c.id),
   })
   // Se apunta ANTES de enviar: si el proceso se corta a mitad, se comprueba en Gmail si salió.
   const startedAt = Date.now()
@@ -401,15 +409,18 @@ export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to
     const e = err as GmailError
     const msg = String(e.message ?? err).slice(0, 300)
     if (test) throw err
-    // ¿Salió de verdad? Con un error de red o de Google se mira en Enviados antes de nada.
+    // ¿Salió de verdad? Con un error de red o de Google no se decide ahora: si no aparece ya en
+    // Enviados, el envío queda «en duda» y recoverPending lo vuelve a mirar en unos minutos.
     if (ambiguous(e)) {
       const found = await findSent(boxOf(box), c.email, Math.floor(startedAt / 1000) - 120).catch(() => null)
       if (found) {
         recordSent(box, c, steps, subject, found, newThread, found.messageId || messageId)
         return 'sent'
       }
+      run('UPDATE outreach_mailboxes SET nextSendAt = ?, lastError = ? WHERE email = ?', [isoIn(10 * 60_000), msg, box.email])
+      return 'failed'
     }
-    run('UPDATE outreach_contacts SET pendingAt = NULL, attempts = attempts + 1 WHERE id = ?', [c.id])
+    run('UPDATE outreach_contacts SET pendingAt = NULL WHERE id = ?', [c.id])
     run('INSERT INTO outreach_messages (contactId, mailbox, step, subject, error, sentAt) VALUES (?, ?, ?, ?, ?, ?)', [c.id, box.email, c.step, subject, msg, nowIso()])
     if (e.auth) {
       pauseMailbox(box.email, 'El permiso de Google ya no vale: vuelve a conectar el buzón.')
@@ -420,28 +431,36 @@ export async function sendStep(box: Mailbox, c: Contact, s: Settings, opts: { to
       run('UPDATE outreach_mailboxes SET nextSendAt = ?, lastError = ? WHERE email = ?', [isoIn(DAY_MS), msg, box.email])
       return 'failed'
     }
-    if (e.status === 403) {
-      // Problema del buzón (permisos, API sin activar…), no del contacto.
-      pauseMailbox(box.email, `Google no deja enviar desde este buzón: ${msg}`)
-      return 'failed'
-    }
-    // Error propio de este contacto (dirección rara, hilo borrado…) o tres fallos seguidos:
-    // se cierra el contacto y el buzón sigue con el siguiente.
-    if (e.status === 400 || e.status === 404 || (c.attempts ?? 0) + 1 >= 3) {
-      if (e.status === 400 && /recipient|address|to header/i.test(msg)) {
+    // Errores propios de ESTE contacto: dirección imposible o hilo borrado. Se cierra y el buzón
+    // no sigue en esta vuelta (si el fallo fuera del buzón, no se queman más contactos).
+    const recipient = e.status === 400 && /invalid to header|recipient address|invalid (email )?address/i.test(msg)
+    const goneThread = e.status === 404 && !newThread
+    if (recipient || goneThread) {
+      if (recipient) {
         run("UPDATE outreach_contacts SET status = 'bounced', nextAt = NULL WHERE id = ?", [c.id])
         suppress(c.email, 'dirección no válida')
       } else {
         run("UPDATE outreach_contacts SET status = 'failed', nextAt = NULL WHERE id = ?", [c.id])
       }
-      return 'skipped'
+      stopIfFailing(box, msg)
+      return 'closed'
+    }
+    // Cualquier otro 4xx (403, 400 de cuenta, «Mail service not enabled»…) es del buzón: se para.
+    if (e.status && e.status >= 400 && e.status < 500) {
+      pauseMailbox(box.email, `Google no deja enviar desde este buzón: ${msg}`)
+      return 'failed'
     }
     // Fallo pasajero: el buzón descansa 30 minutos; con 5 fallos seguidos se para y avisa.
     run('UPDATE outreach_mailboxes SET nextSendAt = ?, lastError = ? WHERE email = ?', [isoIn(30 * 60_000), msg, box.email])
-    const last = all<{ error: string | null }>('SELECT error FROM outreach_messages WHERE mailbox = ? ORDER BY id DESC LIMIT 5', [box.email])
-    if (last.length === 5 && last.every((r) => r.error)) pauseMailbox(box.email, `5 envíos seguidos han fallado. Último error: ${msg}`)
+    stopIfFailing(box, msg)
     return 'failed'
   }
+}
+
+/** 5 envíos seguidos con error desde la última reanudación: el buzón se para y avisa. */
+function stopIfFailing(box: Mailbox, msg: string) {
+  const last = all<{ error: string | null }>('SELECT error FROM outreach_messages WHERE mailbox = ? AND sentAt > ? ORDER BY id DESC LIMIT 5', [box.email, box.resumedAt ?? ''])
+  if (last.length === 5 && last.every((r) => r.error)) pauseMailbox(box.email, `5 envíos seguidos han fallado. Último error: ${msg}`)
 }
 
 export function pauseMailbox(email: string, reason: string) {
@@ -459,12 +478,20 @@ function notifyAdmins(subject: string, body: string) {
  * Antes de un seguimiento se mira el hilo en Gmail: si hay algo recibido que aún no se ha
  * leído (una respuesta, un rebote, una baja), se lee el buzón primero y no se envía.
  */
-async function threadIsQuiet(box: Mailbox, c: Contact): Promise<boolean> {
-  if (!c.threadId || c.step === 0) return true
-  const msgs = await threadMessages(boxOf(box), c.threadId)
+async function threadIsQuiet(box: Mailbox, c: Contact): Promise<'quiet' | 'busy' | 'gone'> {
+  if (!c.threadId || c.step === 0) return 'quiet'
+  let msgs: { id: string; labelIds: string[]; internalDate: string }[]
+  try {
+    msgs = await threadMessages(boxOf(box), c.threadId)
+  } catch (err) {
+    // Hilo borrado del buzón: no se puede seguir en él.
+    if ((err as GmailError).status === 404) return 'gone'
+    throw err
+  }
   const since = new Date(c.lastSentAt ?? 0).getTime() - 60_000
-  const fresh = msgs.filter((m) => !m.labelIds.includes('SENT') && Number(m.internalDate) > since && !one('SELECT 1 AS x FROM outreach_seen WHERE gmailId = ?', [m.id]))
-  return fresh.length === 0
+  const own = ['SENT', 'DRAFT', 'SCHEDULED', 'CHAT']
+  const fresh = msgs.filter((m) => !m.labelIds.some((l) => own.includes(l)) && Number(m.internalDate) > since && !one('SELECT 1 AS x FROM outreach_seen WHERE gmailId = ?', [m.id]))
+  return fresh.length ? 'busy' : 'quiet'
 }
 
 /** Una vuelta de envío: como mucho un correo por buzón, si le toca. */
@@ -479,7 +506,7 @@ export async function sendTick(): Promise<number> {
   for (const box of boxes) {
     // Sin una lectura del buzón en los últimos 15 minutos no se envía nada:
     // podría haber respuestas o bajas sin procesar.
-    if (!box.lastPollAt || now - new Date(box.lastPollAt).getTime() > 15 * 60_000) continue
+    if (!box.lastPollAt || now - new Date(box.lastPollAt).getTime() > 15 * 60_000 || backlog.has(box.email)) continue
     const cap = capFor(box, s)
     if (sentLast24h(box.email) >= cap) continue
     const skip: number[] = []
@@ -489,10 +516,20 @@ export async function sendTick(): Promise<number> {
       if (!c) break
       skip.push(c.id)
       if (c.status === 'active') {
-        const quiet = await threadIsQuiet(box, c).catch(() => false)
-        if (!quiet) {
-          // Hay algo nuevo en el hilo: se lee el buzón ya y este seguimiento espera.
+        let state = await threadIsQuiet(box, c).catch(() => 'error' as const)
+        if (state === 'gone') {
+          run("UPDATE outreach_contacts SET status = 'failed', nextAt = NULL WHERE id = ?", [c.id])
+          continue
+        }
+        if (state === 'busy') {
+          // Hay algo nuevo en el hilo: se lee el buzón ya; si después sigue igual, se aplaza un día.
           await pollMailbox(box).catch((err) => reportError(err, 'campaña:lectura'))
+          const after = one<Contact>('SELECT * FROM outreach_contacts WHERE id = ?', [c.id])
+          if (after?.status !== 'active') continue
+          state = await threadIsQuiet(box, after).catch(() => 'error' as const)
+        }
+        if (state !== 'quiet') {
+          run("UPDATE outreach_contacts SET nextAt = ? WHERE id = ? AND status = 'active'", [isoIn(DAY_MS), c.id])
           continue
         }
       }
@@ -509,6 +546,7 @@ export async function sendTick(): Promise<number> {
       // Si el primer envío falla sin más, el contacto vuelve a la cola.
       run("UPDATE outreach_contacts SET status = 'pending', mailbox = NULL WHERE id = ? AND status = 'sending' AND pendingAt IS NULL", [c.id])
       if (result === 'skipped') continue
+      if (result === 'closed') break
       if (result === 'sent') {
         sent++
         run('UPDATE outreach_mailboxes SET nextSendAt = ?, lastError = NULL WHERE email = ?', [isoIn(rand(s.gapMin, s.gapMax) * 60_000), box.email])
@@ -525,21 +563,26 @@ export async function sendTick(): Promise<number> {
  */
 async function recoverPending() {
   run("UPDATE outreach_contacts SET status = 'pending', mailbox = NULL WHERE status = 'sending' AND pendingAt IS NULL")
-  for (const c of all<Contact>('SELECT * FROM outreach_contacts WHERE pendingAt IS NOT NULL')) {
+  // Se espera a que Gmail tenga el envío en Enviados (unos minutos) antes de decidir.
+  for (const c of all<Contact>('SELECT * FROM outreach_contacts WHERE pendingAt IS NOT NULL AND pendingAt < ?', [isoIn(-5 * 60_000)])) {
     const box = c.mailbox ? one<Mailbox>('SELECT * FROM outreach_mailboxes WHERE email = ?', [c.mailbox]) : null
-    let found: Awaited<ReturnType<typeof findSent>> = null
-    if (box) {
-      try {
-        found = await findSent(boxOf(box), c.email, Math.floor(new Date(c.pendingAt!).getTime() / 1000) - 120)
-      } catch {
-        continue // Gmail no responde: se vuelve a mirar en la siguiente vuelta
-      }
+    if (!box) {
+      // El buzón ya no existe: nadie puede comprobarlo; se cierra sin arriesgar un doble envío.
+      run("UPDATE outreach_contacts SET pendingAt = NULL, status = CASE WHEN status IN ('sending', 'pending') THEN 'failed' ELSE 'done' END, nextAt = NULL WHERE id = ?", [c.id])
+      continue
     }
-    if (found && box) {
+    let found: Awaited<ReturnType<typeof findSent>> = null
+    try {
+      found = await findSent(boxOf(box), c.email, Math.floor(new Date(c.pendingAt!).getTime() / 1000) - 120)
+    } catch {
+      continue // Gmail no responde (o el buzón perdió el permiso): se vuelve a mirar más tarde
+    }
+    if (found) {
       const steps = jsonOr<Step[]>(c.steps, [])
       const { newThread, subject } = stepInfo(c, steps[c.step])
       recordSent(box, c, steps, found.subject || subject, found, newThread, found.messageId)
     } else {
+      // Gmail confirma que no salió: vuelve a la cola.
       run("UPDATE outreach_contacts SET pendingAt = NULL, status = CASE WHEN status = 'sending' THEN 'pending' ELSE status END, mailbox = CASE WHEN status = 'sending' THEN NULL ELSE mailbox END WHERE id = ?", [c.id])
     }
   }
@@ -555,7 +598,7 @@ const BOUNCE_SUBJECT = /delivery status notification|undeliverable|undelivered|r
 // in January» son respuestas: las ve una persona.
 const UNSUB_ALONE = /^(no|nope|stop|unsubscribe|remove( me)?|please remove( me)?|take me off( your list)?|not interested|no,? thanks?( you)?|pass)[\s.!,]*$/i
 const UNSUB_ANY = /unsubscribe|remove me|remove us|take me off|take us off|stop (e-?mailing|contacting|writing|sending)|do not (e-?mail|contact|write)|don'?t (e-?mail|contact|write)|not interested|no longer interested/i
-const INTEREST = /\?|call|phone|send|pricing|price|cost|later|next (week|month|year|quarter)|january|february|march|april|may|june|july|august|september|october|november|december|demo|meeting|info|details|how|what|maybe/i
+const INTEREST = /\?|\b(call me|call us|give me a call|phone|send me|send over|pricing|price|cost|later|next (week|month|year|quarter)|january|february|march|april|june|july|august|september|october|november|december|demo|meeting|more info|details|maybe|interested in)\b/i
 const TOKEN_IN = /unsubscribe\s+([0-9a-z]+\.[A-Za-z0-9_-]{16})/i
 
 /** Lo que escribió la persona, sin el correo citado que va detrás. */
@@ -706,8 +749,12 @@ export async function pollMailbox(box: Mailbox): Promise<{ replies: number; boun
       )
     }
   }
-  // Si quedaron mensajes sin leer, la próxima lectura sigue desde el último leído.
-  const until = pending.length > batch.length && lastDate ? new Date(lastDate).toISOString() : nowIso()
+  // Si quedaron mensajes sin leer, la próxima lectura sigue desde el último leído y,
+  // mientras tanto, el buzón no envía (podría haber una baja entre lo pendiente).
+  const truncated = pending.length > batch.length
+  if (truncated) backlog.add(box.email)
+  else backlog.delete(box.email)
+  const until = truncated && lastDate ? new Date(lastDate).toISOString() : nowIso()
   run('UPDATE outreach_mailboxes SET lastPollAt = ? WHERE email = ?', [until, box.email])
   return counts
 }
@@ -724,8 +771,9 @@ function healthCheck(s: Settings) {
     return {
       mailbox: m.email,
       sent: count('SELECT COUNT(*) AS n FROM outreach_messages WHERE mailbox = ? AND error IS NULL AND sentAt > ?'),
-      bounces: count("SELECT COUNT(*) AS n FROM outreach_events WHERE mailbox = ? AND kind = 'bounce' AND createdAt > ?"),
-      blocks: count("SELECT COUNT(*) AS n FROM outreach_events WHERE mailbox = ? AND kind = 'block' AND createdAt > ?"),
+      // Solo avisos de correos enviados en el periodo (los tardíos de antes de reanudar no cuentan).
+      bounces: one<{ n: number }>("SELECT COUNT(*) AS n FROM outreach_events e WHERE e.mailbox = ? AND e.kind = 'bounce' AND EXISTS (SELECT 1 FROM outreach_messages x WHERE x.contactId = e.contactId AND x.error IS NULL AND x.sentAt > ?)", [m.email, since])?.n ?? 0,
+      blocks: one<{ n: number }>("SELECT COUNT(*) AS n FROM outreach_events e WHERE e.mailbox = ? AND e.kind = 'block' AND EXISTS (SELECT 1 FROM outreach_messages x WHERE x.contactId = e.contactId AND x.error IS NULL AND x.sentAt > ?)", [m.email, since])?.n ?? 0,
     }
   })
   for (const r of rows) {
@@ -741,7 +789,7 @@ function healthCheck(s: Settings) {
   if (!s.running) return
   const since = s.startedAt && s.startedAt > week ? s.startedAt : week
   const sent = one<{ n: number }>('SELECT COUNT(*) AS n FROM outreach_messages WHERE error IS NULL AND sentAt > ?', [since])?.n ?? 0
-  const bounces = one<{ n: number }>("SELECT COUNT(*) AS n FROM outreach_events WHERE kind = 'bounce' AND createdAt > ?", [since])?.n ?? 0
+  const bounces = one<{ n: number }>("SELECT COUNT(*) AS n FROM outreach_events e WHERE e.kind = 'bounce' AND EXISTS (SELECT 1 FROM outreach_messages x WHERE x.contactId = e.contactId AND x.error IS NULL AND x.sentAt > ?)", [since])?.n ?? 0
   if (sent >= 50 && bounces / sent > s.maxBounce * 2) {
     saveSettings({ running: false })
     notifyAdmins('Campaña parada por rebotes', `Rebotes del ${((bounces / sent) * 100).toFixed(1)} % (${bounces} de ${sent}). La campaña se ha parado sola para proteger el dominio.`)
@@ -805,14 +853,20 @@ export async function outreachTick() {
     await recoverPending()
     let polled = false
     for (const box of all<Mailbox>('SELECT * FROM outreach_mailboxes')) {
-      if (box.lastPollAt && Date.now() - new Date(box.lastPollAt).getTime() < 10 * 60_000) continue
+      if (box.lastPollAt && Date.now() - new Date(box.lastPollAt).getTime() < 10 * 60_000 && !backlog.has(box.email)) continue
       polled = true
       try {
         await pollMailbox(box)
       } catch (err) {
         const e = err as GmailError
+        const msg = String(e.message ?? err).slice(0, 300)
         if (e.auth && !box.paused) pauseMailbox(box.email, 'El permiso de Google ya no vale: vuelve a conectar el buzón.')
-        else run('UPDATE outreach_mailboxes SET lastError = ? WHERE email = ?', [String(e.message ?? err).slice(0, 300), box.email])
+        else {
+          run('UPDATE outreach_mailboxes SET lastError = ? WHERE email = ?', [msg, box.email])
+          // Una hora sin poder leerlo: se para (sin leer no se envía) y se avisa.
+          const since = box.lastPollAt ?? box.createdAt
+          if (!box.paused && Date.now() - new Date(since).getTime() > 60 * 60_000) pauseMailbox(box.email, `No se puede leer el buzón desde hace más de una hora: ${msg}`)
+        }
       }
     }
     if (polled) healthCheck(settings())
