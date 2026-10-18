@@ -1,6 +1,7 @@
 // Programador interno: cada hora lanza la medición semanal de los espacios que
 // la tengan pendiente (a partir de las 7:00 de Madrid), envía los avisos de la
-// prueba gratis y vigila el DNS. Va apagado en desarrollo para no gastar API sin
+// prueba gratis y vigila el DNS; cada 2 minutos mueve la campaña de correo.
+// Va apagado en desarrollo para no gastar API sin
 // querer: PLACTON_SCHEDULER=1 lo enciende.
 
 export async function register() {
@@ -46,6 +47,9 @@ export async function register() {
   // unref: los temporizadores no mantienen vivo un proceso que quiere terminar.
   setTimeout(tick, 60_000).unref()
   setInterval(tick, 60 * 60 * 1000).unref()
+  // Campaña de correo: cada 2 minutos (no envía nada mientras esté parada en el panel).
+  const { outreachTick } = await import('./lib/outreach/engine')
+  setInterval(() => void outreachTick(), 2 * 60 * 1000).unref()
 }
 
 /** Errores de cualquier página o API: se guardan y se avisa al administrador. */

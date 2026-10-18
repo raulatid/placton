@@ -3,9 +3,12 @@ import { ipFrom, recordSignup, signupAllowed } from '@/lib/abuse'
 import { endAllSessions, safeNext, startSession } from '@/lib/auth'
 import { appUrl, cookieDomain } from '@/lib/email'
 import { googleProfile } from '@/lib/google'
+import { finishConnect, isOutreachReturn } from '@/lib/outreach/connect'
 import * as repo from '@/lib/repo'
 
 export async function GET(req: NextRequest) {
+  // «Conectar buzón» de la campaña usa este mismo cliente y esta misma vuelta.
+  if (isOutreachReturn(req)) return finishConnect(req)
   // Siempre a la app con su dirección real (dentro del contenedor req.url es localhost:8080).
   const fail = () => NextResponse.redirect(`${appUrl()}/login?error=google`)
   const raw = req.cookies.get('placton_oauth')?.value

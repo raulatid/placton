@@ -297,6 +297,98 @@ CREATE TABLE IF NOT EXISTS email_log (
   error TEXT,
   createdAt TEXT NOT NULL
 );
+
+-- Campaña de captación por correo (lib/outreach): buzones de envío conectados
+-- por OAuth, contactos con su secuencia ya redactada, lo enviado, lo recibido
+-- (respuestas, rebotes, bajas) y la lista de exclusión permanente.
+CREATE TABLE IF NOT EXISTS outreach_mailboxes (
+  email TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  refreshToken TEXT NOT NULL,
+  warmupFrom TEXT NOT NULL,
+  paused INTEGER NOT NULL DEFAULT 0,
+  pausedReason TEXT,
+  nextSendAt TEXT,
+  lastPollAt TEXT,
+  lastError TEXT,
+  createdAt TEXT NOT NULL,
+  resumedAt TEXT
+);
+
+CREATE TABLE IF NOT EXISTS outreach_contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL UNIQUE,
+  domain TEXT NOT NULL,
+  company TEXT NOT NULL DEFAULT '',
+  audience TEXT NOT NULL,
+  segment TEXT NOT NULL DEFAULT '',
+  hook TEXT NOT NULL DEFAULT '',
+  country TEXT NOT NULL DEFAULT '',
+  tz TEXT NOT NULL DEFAULT 'America/New_York',
+  priority INTEGER NOT NULL DEFAULT 0,
+  steps TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'pending',
+  step INTEGER NOT NULL DEFAULT 0,
+  mailbox TEXT,
+  threadId TEXT,
+  messageIds TEXT NOT NULL DEFAULT '[]',
+  subject TEXT,
+  nextAt TEXT,
+  lastSentAt TEXT,
+  repliedAt TEXT,
+  signedUpAt TEXT,
+  paidAt TEXT,
+  workspaceId INTEGER,
+  importedAt TEXT NOT NULL,
+  pendingAt TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_outreach_contacts_due ON outreach_contacts(status, nextAt);
+CREATE INDEX IF NOT EXISTS idx_outreach_contacts_domain ON outreach_contacts(domain);
+CREATE INDEX IF NOT EXISTS idx_outreach_contacts_thread ON outreach_contacts(threadId);
+
+CREATE TABLE IF NOT EXISTS outreach_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contactId INTEGER NOT NULL,
+  mailbox TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  subject TEXT NOT NULL,
+  gmailId TEXT,
+  error TEXT,
+  sentAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outreach_messages_mailbox ON outreach_messages(mailbox, sentAt);
+CREATE INDEX IF NOT EXISTS idx_outreach_messages_sent ON outreach_messages(sentAt);
+
+CREATE TABLE IF NOT EXISTS outreach_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contactId INTEGER,
+  mailbox TEXT,
+  kind TEXT NOT NULL,
+  fromEmail TEXT NOT NULL DEFAULT '',
+  subject TEXT NOT NULL DEFAULT '',
+  snippet TEXT NOT NULL DEFAULT '',
+  threadId TEXT,
+  gmailId TEXT UNIQUE,
+  createdAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_outreach_events_kind ON outreach_events(kind, createdAt);
+
+CREATE TABLE IF NOT EXISTS outreach_suppress (
+  value TEXT PRIMARY KEY,
+  reason TEXT NOT NULL,
+  createdAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS outreach_seen (
+  gmailId TEXT PRIMARY KEY,
+  createdAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS outreach_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `
 
 const globalForDb = globalThis as unknown as { __plactonDb?: DatabaseSync }
@@ -332,6 +424,10 @@ export function db(): DatabaseSync {
     'ALTER TABLE workspaces ADD COLUMN pastDueSince TEXT',
     // Prompts borrados: se archivan (su historial de respuestas se conserva).
     'ALTER TABLE prompts ADD COLUMN deletedAt TEXT',
+    // Campaña de correo: envío en curso, fallos por paso y reanudación de buzones.
+    'ALTER TABLE outreach_contacts ADD COLUMN pendingAt TEXT',
+    'ALTER TABLE outreach_contacts ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE outreach_mailboxes ADD COLUMN resumedAt TEXT',
     // Pruebas ya usadas (permanente): borrar el espacio o la cuenta no da otra prueba.
     "INSERT OR IGNORE INTO trial_log (workspaceId, userId, domain, createdAt) SELECT id, createdBy, lower(domain), createdAt FROM workspaces WHERE onboarded = 1 AND billingOwnerId IS NULL",
   ]) {
