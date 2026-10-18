@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { useEffect } from 'react'
+import { LivePing } from '../LivePing'
 
 /** Cuenta la página vista en la analítica propia (sin cookies ni terceros). */
 export function Track() {
@@ -16,5 +17,5 @@ export function Track() {
         void fetch('/api/hit', { method: 'POST', body, headers: { 'content-type': 'application/json' }, keepalive: true })
     } catch {}
   }, [path])
-  return null
+  return <LivePing />
 }

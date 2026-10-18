@@ -1,3 +1,4 @@
+import { LivePing } from '@/components/LivePing'
 import { Shell } from '@/components/panel/Shell'
 import { canManage, isAdmin, requireCtx } from '@/lib/auth'
 import { getT } from '@/lib/i18n'
@@ -63,6 +64,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       logoutAction={logoutAction}
     >
       {children}
+      <LivePing app />
     </Shell>
   )
 }

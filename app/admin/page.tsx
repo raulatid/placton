@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Columns } from '@/components/admin/Columns'
+import { LiveNow } from '@/components/admin/LiveNow'
 import { int, percent, usd } from '@/components/admin/format'
 import { BarList, Flag, Funnel, Heatmap, Kpi, NEUTRAL, ORANGE, Panel, PnlLine, Section, TEAL } from '@/components/admin/parts'
 import { Logo } from '@/components/Logo'
@@ -20,6 +21,7 @@ export const dynamic = 'force-dynamic'
 // (caché de 5 minutos; «Actualizar» las vuelve a pedir).
 
 const NAV = [
+  ['en-vivo', 'En vivo'],
   ['resumen', 'Resumen'],
   ['ingresos', 'Ingresos'],
   ['captacion', 'Captación'],
@@ -107,6 +109,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </header>
 
       <main className="mx-auto max-w-[1320px] space-y-12 px-4 py-8 sm:px-6">
+        {/* ───────── En vivo ───────── */}
+        <Section id="en-vivo" title="En vivo" hint="Quién está ahora mismo en la web pública, en el alta y dentro de la aplicación. Sin cookies: nada de esto se guarda.">
+          <LiveNow />
+        </Section>
+
         {/* ───────── Resumen ───────── */}
         <Section id="resumen" title="Resumen" hint={`Del ${fmtDate(p.from, 'es')} al ${fmtDate(p.to, 'es')}. Las variaciones comparan con los ${RANGES[p.id].label} anteriores.`}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
