@@ -218,7 +218,7 @@ function pendingCells(ws: Workspace, day: string, since = weekWindow(day).done):
  * Arranca una medición en segundo plano y devuelve su id al momento. Si ya hay
  * una en marcha para el espacio, devuelve esa.
  */
-export function startRun(workspaceId: number, trigger: Run['trigger']): { runId: number | null; reason?: string } {
+export function startRun(workspaceId: number, trigger: Run['trigger'], opts: { bypassTrial?: boolean } = {}): { runId: number | null; reason?: string } {
   const current = activeRun(workspaceId)
   if (current) return { runId: current.id }
   const ws = repo.workspaceById(workspaceId)
@@ -227,7 +227,8 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
 
   const day = today()
   let window = weekWindow(day)
-  if (repo.isFreeTrial(ws)) {
+  // Los administradores (pruebas internas) no tienen los límites de la prueba gratis.
+  if (repo.isFreeTrial(ws) && !opts.bypassTrial) {
     const gate = trialGate(ws, trigger, day)
     if ('reason' in gate) return { runId: null, reason: gate.reason }
     window = gate.window
@@ -463,7 +464,9 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
     if (failed > cells.length / 2) {
       const why = one<{ error: string }>('SELECT error FROM answers WHERE runId = ? AND error IS NOT NULL ORDER BY id DESC LIMIT 1', [runId])?.error ?? ''
       run("UPDATE runs SET status = 'error', error = ?, finishedAt = ?, costUsd = ? WHERE id = ?", [`Fallaron ${failed} de ${cells.length}: ${why}`.slice(0, 500), nowIso(), costUsd, runId])
-      reportError(new Error(`Medición con ${failed} de ${cells.length} respuestas fallidas: ${why}`.slice(0, 300)), `medición ${ws.name}`)
+      // Solo se avisa por correo si fallan varias: un «Medir ahora» con 1 respuesta pendiente
+      // que da un error puntual del proveedor no es una avería (se reintenta sola).
+      if (failed >= 3) reportError(new Error(`Medición con ${failed} de ${cells.length} respuestas fallidas: ${why}`.slice(0, 300)), `medición ${ws.name}`)
       return
     }
     run("UPDATE runs SET status = 'ok', error = NULL, finishedAt = ?, costUsd = ? WHERE id = ?", [nowIso(), costUsd, runId])

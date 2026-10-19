@@ -7,7 +7,7 @@ import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { suggestPrompts } from '@/lib/ai'
 import { runAudit, saveAudit } from '@/lib/audit'
-import { canManage, endOtherSessions, endSession, hashPassword, passwordProblem, randomToken, requireCtx, requireUser, verifyPassword } from '@/lib/auth'
+import { canManage, endOtherSessions, endSession, hashPassword, passwordProblem, randomToken, requireCtx, requireUser, verifyPassword, isAdmin } from '@/lib/auth'
 import { digestByDefault } from '@/lib/digest'
 import { appUrl, sendEmail, siteUrl } from '@/lib/email'
 import { libMessage } from '@/components/panel/format'
@@ -57,11 +57,13 @@ export async function switchWorkspaceAction(fd: FormData) {
 /* ───────────── Medición ───────────── */
 
 export async function runNowAction(): Promise<ActionResult> {
-  const { workspace } = await requireCtx()
+  const { workspace, user } = await requireCtx()
   const { lang, t } = await getT()
+  const admin = isAdmin(user)
   // Prueba gratis: un solo «Medir ahora» en toda la prueba (cada medición cuesta API),
-  // y nunca antes de confirmar el correo si aún no tiene ninguna medición.
-  if (repo.isFreeTrial(workspace) && !activeRun(workspace.id)) {
+  // y nunca antes de confirmar el correo si aún no tiene ninguna medición. Los
+  // administradores no tienen ese límite (pruebas internas).
+  if (repo.isFreeTrial(workspace) && !activeRun(workspace.id) && !admin) {
     if (!trialMeasurements(workspace.id).first && repo.creatorEmailPending(workspace)) {
       return { error: t('Confirm your email first. We start measuring as soon as you do.', 'Confirma antes tu correo. En cuanto lo hagas, empezamos a medir.') }
     }
@@ -74,7 +76,7 @@ export async function runNowAction(): Promise<ActionResult> {
       }
     }
   }
-  const res = startRun(workspace.id, 'manual')
+  const res = startRun(workspace.id, 'manual', { bypassTrial: admin })
   if (!res.runId) return { error: res.reason ? libMessage(res.reason, lang) : t("Couldn't start the run.", 'No se pudo lanzar la medición.') }
   return { ok: t('Run started', 'Medición en marcha') }
 }

@@ -305,14 +305,19 @@ interface DfsItem {
 }
 
 async function askGoogleOverview(prompt: string, ctx: AskContext): Promise<AskResult> {
-  try {
-    return await askGoogleOverviewOnce(prompt, ctx)
-  } catch (err) {
-    // DataForSEO devuelve a veces «Internal SE Server Error»: un segundo intento suele bastar.
-    await new Promise((r) => setTimeout(r, 3000))
-    if (ctx.signal?.aborted) throw err
-    return askGoogleOverviewOnce(prompt, ctx)
+  // DataForSEO devuelve a veces «Internal SE Server Error» varias veces seguidas (19-10-2026,
+  // dos fallos en 3 s): hasta tres intentos, esperando 3 y 10 segundos.
+  let last: unknown
+  for (const wait of [0, 3000, 10_000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait))
+    if (ctx.signal?.aborted) break
+    try {
+      return await askGoogleOverviewOnce(prompt, ctx)
+    } catch (err) {
+      last = err
+    }
   }
+  throw last
 }
 
 const dfsHeaders = () => ({
