@@ -17,7 +17,7 @@ import { markInsightsRead } from '@/lib/insights'
 import { isPaidPlan, PLANS, type Interval } from '@/lib/plans'
 import * as repo from '@/lib/repo'
 import * as billing from '@/lib/stripe'
-import { startRun } from '@/lib/tracking'
+import { activeRun, startRun, trialManualRunsLeft, trialMeasurements } from '@/lib/tracking'
 import type { Role } from '@/lib/types'
 import { LOGO_MAX_BYTES, removeWorkspaceLogo, saveWorkspaceLogo } from '@/lib/workspaceLogo'
 
@@ -59,6 +59,21 @@ export async function switchWorkspaceAction(fd: FormData) {
 export async function runNowAction(): Promise<ActionResult> {
   const { workspace } = await requireCtx()
   const { lang, t } = await getT()
+  // Prueba gratis: un solo «Medir ahora» en toda la prueba (cada medición cuesta API),
+  // y nunca antes de confirmar el correo si aún no tiene ninguna medición.
+  if (repo.isFreeTrial(workspace) && !activeRun(workspace.id)) {
+    if (!trialMeasurements(workspace.id).first && repo.creatorEmailPending(workspace)) {
+      return { error: t('Confirm your email first. We start measuring as soon as you do.', 'Confirma antes tu correo. En cuanto lo hagas, empezamos a medir.') }
+    }
+    if (trialManualRunsLeft(workspace) === 0) {
+      return {
+        error: t(
+          'The free trial includes one “Run now” and you have already used it. Choose a plan to run it whenever you want.',
+          'La prueba gratis incluye un «Medir ahora» y ya lo has usado. Elige un plan para medir cuando quieras.',
+        ),
+      }
+    }
+  }
   const res = startRun(workspace.id, 'manual')
   if (!res.runId) return { error: res.reason ? libMessage(res.reason, lang) : t("Couldn't start the run.", 'No se pudo lanzar la medición.') }
   return { ok: t('Run started', 'Medición en marcha') }
@@ -76,6 +91,8 @@ export async function addPromptAction(_: ActionResult, fd: FormData): Promise<Ac
   const id = repo.addPrompt(workspace.id, text, topic, 'manual')
   if (!id) return { error: t('That prompt is already on the list.', 'Esa pregunta ya está en la lista.') }
   revalidatePath('/dashboard/prompts')
+  // En la prueba gratis, con su «Medir ahora» ya usado, no se le ofrece.
+  if (trialManualRunsLeft(workspace) === 0) return { ok: t('Added. It will be tracked in your next measurement.', 'Añadida. Se medirá en tu próxima medición.') }
   return { ok: t('Added. It will be tracked in the next weekly run, or right now with “Run now”.', 'Añadida. Se medirá en la próxima medición semanal o ahora mismo con «Medir ahora».') }
 }
 

@@ -4,7 +4,8 @@ import { recordTrial, trialBlockReason } from '@/lib/abuse'
 import { run } from '@/lib/db'
 import { reportError } from '@/lib/monitor'
 import { analyzeBrand, peekSite, suggestPrompts, type BrandProfile, type SuggestedPrompt } from '@/lib/ai'
-import { requireUser } from '@/lib/auth'
+import { emailVerifyUrl, isEmailVerified, requireUser, sendVerificationEmail } from '@/lib/auth'
+import { emailReady } from '@/lib/email'
 import { availablePlatformIds } from '@/lib/engines'
 import { getT } from '@/lib/i18n'
 import { canonicalCountry, countryFromDomain } from '@/lib/countries'
@@ -21,8 +22,7 @@ import type { Workspace } from '@/lib/types'
 async function draftWorkspace(): Promise<{ ws: Workspace; userId: number }> {
   const user = await requireUser()
   const spaces = repo.workspacesOf(user.id)
-  const drafts = spaces.filter((w) => !w.onboarded && w.role === 'owner')
-  let ws: Workspace | null = drafts.find((w) => w.id === user.currentWorkspaceId) ?? drafts[0] ?? null
+  let ws: Workspace | null = repo.onboardingDraftOf(user)
   if (!ws) {
     if (spaces.some((w) => w.onboarded)) throw new Error('No hay ningún espacio nuevo a medias: créalo desde el selector de espacios.')
     ws = repo.createWorkspace(user.id, 'My workspace')
@@ -103,13 +103,38 @@ export interface FinishPayload {
   leftovers: SuggestedPrompt[]
 }
 
-export async function finishAction(payload: FinishPayload): Promise<{ error: string } | { ok: true; runId: number | null; trialUsed?: 'persona' | 'web' }> {
-  const { ws, userId } = await draftWorkspace()
+/** Enlace de confirmación en pantalla solo en local y sin correo configurado (para poder probarlo). */
+function devVerifyLink(user: { id: number; email: string }): string | undefined {
+  return !emailReady() && process.env.NODE_ENV !== 'production' ? (emailVerifyUrl(user) ?? undefined) : undefined
+}
+
+export type FinishResult =
+  | { error: string }
+  /** Falta confirmar el correo: no se ha guardado ni gastado nada. */
+  | { verify: true; email: string; draftId: number; link?: string }
+  | { ok: true; runId: number | null; trialUsed?: 'persona' | 'web' }
+
+export async function finishAction(payload: FinishPayload): Promise<FinishResult> {
+  const user = await requireUser()
   const { t } = await getT()
+  // Otra pestaña ya terminó el alta (p. ej. la que abrió el enlace del correo): al panel.
+  // Sin ninguna espera entre esta comprobación y lo que se guarda abajo, dos pestañas
+  // a la vez no pueden lanzar dos mediciones.
+  const draft = repo.onboardingDraftOf(user)
+  if (!draft && repo.workspacesOf(user.id).some((w) => w.onboarded)) return { ok: true, runId: null }
+  const { ws, userId } = draft ? { ws: draft as Workspace, userId: user.id } : await draftWorkspace()
   const brandName = payload.brandName.trim().slice(0, 80)
   if (!brandName) return { error: t('Your brand name is missing.', 'Falta el nombre de tu marca.') }
   const prompts = payload.prompts.filter((p) => p.text.trim())
   if (!prompts.length) return { error: t('Pick at least one prompt to track.', 'Elige al menos una pregunta que seguir.') }
+
+  // Quien se registró con contraseña confirma su correo antes de la primera medición.
+  // Se mira en la base (no en la sesión) y antes de guardar nada: el espacio sigue sin
+  // terminar, así que tampoco entra en la medición semanal.
+  const me = repo.userById(userId)
+  if (me && !isEmailVerified(me)) return { verify: true, email: me.email, draftId: ws.id, link: devVerifyLink(me) }
+  // Dos pestañas a la vez: si la otra acaba de terminarlo, no se repite nada.
+  if (repo.workspaceById(ws.id)?.onboarded) return { ok: true, runId: null }
 
   repo.updateWorkspace(ws.id, {
     name: ws.name === 'Mi espacio' || ws.name === 'My workspace' ? brandName : ws.name,
@@ -142,4 +167,37 @@ export async function finishAction(payload: FinishPayload): Promise<{ error: str
 
   const { runId } = startRun(ws.id, 'alta')
   return { ok: true, runId }
+}
+
+/* ───────────── Reenviar el correo de confirmación ───────────── */
+
+const RESEND_GAP_MS = 60_000
+/** El del registro y 5 reenvíos como mucho en 24 horas. */
+const MAX_VERIFY_EMAILS = 6
+const resendLock = new Map<number, number>()
+
+export async function resendVerificationAction(): Promise<{ ok: true; verified?: boolean; link?: string; left: number } | { error: string; wait?: number; limit?: boolean }> {
+  const user = await requireUser()
+  const { lang, t } = await getT()
+  const fresh = repo.userById(user.id) ?? user
+  if (isEmailVerified(fresh)) return { ok: true, verified: true, left: 0 }
+  // Uno por minuto: manda el último del registro de correos o, si aún se está enviando
+  // (se apunta al terminar), el freno en memoria de esta misma pulsación.
+  const now = Date.now()
+  const stats = repo.verifyEmailStats(fresh.email)
+  const last = Math.max(resendLock.get(user.id) ?? 0, stats.last ? Date.parse(stats.last) : 0)
+  const wait = Math.ceil((last + RESEND_GAP_MS - now) / 1000)
+  if (wait > 0) return { error: t(`Wait ${wait} seconds before asking again.`, `Espera ${wait} segundos antes de pedirlo otra vez.`), wait }
+  if (stats.count >= MAX_VERIFY_EMAILS)
+    return {
+      error: t(
+        'We have already sent it several times today. Check your spam folder or write to us.',
+        'Ya te lo hemos enviado varias veces hoy. Mira en la carpeta de spam o escríbenos.',
+      ),
+      limit: true,
+    }
+  for (const [id, at] of resendLock) if (now - at > RESEND_GAP_MS) resendLock.delete(id)
+  resendLock.set(user.id, now)
+  const { sent } = await sendVerificationEmail(fresh, lang)
+  return { ok: true, left: Math.max(0, MAX_VERIFY_EMAILS - stats.count - 1), link: sent ? undefined : devVerifyLink(fresh) }
 }

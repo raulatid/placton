@@ -62,6 +62,21 @@ export function updateUser(id: number, fields: Partial<Pick<User, 'firstName' | 
   ])
 }
 
+/** Marca el correo como confirmado (solo la primera vez: guarda cuándo lo hizo). */
+export function markEmailVerified(userId: number) {
+  run('UPDATE users SET emailVerifiedAt = ? WHERE id = ? AND emailVerifiedAt IS NULL', [nowIso(), userId])
+}
+
+/** Correos de confirmación enviados a una dirección en 24 horas: el último y cuántos (freno al reenvío). */
+export function verifyEmailStats(email: string): { last: string | null; count: number } {
+  const since = new Date(Date.now() - 86_400_000).toISOString()
+  const r = one<{ last: string | null; n: number }>("SELECT MAX(createdAt) AS last, COUNT(*) AS n FROM email_log WHERE toEmail = ? AND kind = 'verify' AND createdAt > ?", [
+    email.trim().toLowerCase(),
+    since,
+  ])
+  return { last: r?.last ?? null, count: r?.n ?? 0 }
+}
+
 /** Auditorías hechas por un espacio en la última hora (freno). */
 export function recentAudits(workspaceId: number): number {
   return one<{ n: number }>('SELECT COUNT(*) AS n FROM audits WHERE workspaceId = ? AND createdAt > ?', [workspaceId, new Date(Date.now() - 3_600_000).toISOString()])?.n ?? 0
@@ -175,6 +190,12 @@ export function workspacesOf(userId: number): (Workspace & { role: Role })[] {
   ).map((r) => ({ ...toWorkspace(r)!, role: r.role }))
 }
 
+/** Borrador del alta de una persona: un espacio sin terminar del que es propietaria (el activo, si lo es). */
+export function onboardingDraftOf(user: Pick<User, 'id' | 'currentWorkspaceId'>): (Workspace & { role: Role }) | null {
+  const drafts = workspacesOf(user.id).filter((w) => !w.onboarded && w.role === 'owner')
+  return drafts.find((w) => w.id === user.currentWorkspaceId) ?? drafts[0] ?? null
+}
+
 export function roleIn(workspaceId: number, userId: number): Role | null {
   return one<{ role: Role }>('SELECT role FROM members WHERE workspaceId = ? AND userId = ?', [workspaceId, userId])?.role ?? null
 }
@@ -265,6 +286,35 @@ export function accessOf(ws: Workspace): { ok: boolean; reason: 'trial' | 'activ
     return Date.now() - since < 14 * 86_400_000 ? { ok: true, reason: 'past_due' } : { ok: false, reason: 'past_due' }
   }
   return { ok: false, reason: 'canceled' }
+}
+
+/** ¿Es una prueba gratis? (Los clientes de una agencia no: los paga la agencia.) */
+export function isFreeTrial(ws: Pick<Workspace, 'plan' | 'billingOwnerId'>): boolean {
+  return ws.plan === 'trial' && !ws.billingOwnerId
+}
+
+/**
+ * Apunta que alguien ha entrado al panel del espacio (la segunda medición de la
+ * prueba gratis solo se hace a quien vuelve). Como mucho una escritura cada 10
+ * minutos por espacio: con una visita reciente ni se toca la base, y el WHERE
+ * evita que dos peticiones a la vez escriban las dos. Devuelve si la apuntó.
+ */
+export function recordVisit(ws: Pick<Workspace, 'id' | 'lastVisitAt'>, now = new Date()): boolean {
+  const everyMs = 10 * 60 * 1000
+  const last = ws.lastVisitAt ? new Date(ws.lastVisitAt).getTime() : NaN
+  if (now.getTime() - last < everyMs) return false
+  const cutoff = new Date(now.getTime() - everyMs).toISOString()
+  return run('UPDATE workspaces SET lastVisitAt = ? WHERE id = ? AND (lastVisitAt IS NULL OR lastVisitAt <= ?)', [now.toISOString(), ws.id, cutoff]).changes === 1
+}
+
+/**
+ * ¿Quien creó el espacio se registró con contraseña y aún no ha confirmado su
+ * correo? (Con Google ya viene confirmado; las cuentas antiguas, también.)
+ */
+export function creatorEmailPending(ws: Pick<Workspace, 'createdBy'>): boolean {
+  if (!ws.createdBy) return false
+  const u = one<{ emailVerifiedAt: string | null; googleId: string | null }>('SELECT emailVerifiedAt, googleId FROM users WHERE id = ?', [ws.createdBy])
+  return Boolean(u && !u.emailVerifiedAt && !u.googleId)
 }
 
 /**

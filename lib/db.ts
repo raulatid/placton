@@ -466,6 +466,21 @@ export function db(): DatabaseSync {
   } catch {
     // ya existe
   }
+  // Correo confirmado: solo quien se registra con contraseña tiene que confirmarlo antes
+  // de la primera medición (Google ya lo confirma). Al crear la columna, toda cuenta que
+  // ya existía cuenta como confirmada; el UPDATE solo corre esa primera vez.
+  try {
+    conn.exec('ALTER TABLE users ADD COLUMN emailVerifiedAt TEXT')
+    conn.exec('UPDATE users SET emailVerifiedAt = createdAt')
+  } catch {
+    // ya existe
+  }
+  // Última visita al panel de cada espacio (para saber qué pruebas vuelven).
+  try {
+    conn.exec('ALTER TABLE workspaces ADD COLUMN lastVisitAt TEXT')
+  } catch {
+    // ya existe
+  }
   globalForDb.__plactonDb = conn
   return conn
 }

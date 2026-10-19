@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { analyzeAction, finishAction, suggestAction } from '@/app/onboarding/actions'
+import { analyzeAction, finishAction, resendVerificationAction, suggestAction } from '@/app/onboarding/actions'
 import type { BrandProfile, SuggestedPrompt } from '@/lib/ai'
 import { PLANS } from '@/lib/plans'
 
@@ -40,6 +40,54 @@ function nameFromInput(raw: string): Competitor | null {
     return { name, domain }
   }
   return { name: v, domain: '' }
+}
+
+/* ───── Confirmar el correo antes de la primera medición ───── */
+
+// Si falta confirmar el correo, lo elegido se guarda en este navegador: la pestaña
+// que abre el enlace del correo (o esta misma, si se cerró) lo recupera y sigue sola.
+const PENDING_KEY = 'placton_alta_pendiente'
+const PENDING_MS = 7 * 86_400_000
+const VERIFY_POLL_MS = 4000
+const MAX_RESENDS = 5
+
+interface Pending {
+  email: string
+  draftId: number
+  savedAt: number
+  url: string
+  profile: BrandProfile | null
+  analyzedFor: string
+  competitors: Competitor[]
+  prompts: SuggestedPrompt[]
+  leftovers: SuggestedPrompt[]
+  promptsFor: string
+}
+
+function readPending(): Pending | null {
+  try {
+    const p = JSON.parse(window.localStorage.getItem(PENDING_KEY) ?? 'null') as Pending | null
+    if (!p || typeof p.email !== 'string' || !Array.isArray(p.prompts) || !Array.isArray(p.competitors) || Date.now() - p.savedAt > PENDING_MS) return null
+    return p
+  } catch {
+    return null
+  }
+}
+
+function writePending(p: Pending | null) {
+  try {
+    if (p) window.localStorage.setItem(PENDING_KEY, JSON.stringify(p))
+    else window.localStorage.removeItem(PENDING_KEY)
+  } catch {}
+}
+
+async function checkVerified(): Promise<{ verified: boolean; email?: string; draft?: number | null; finished?: boolean } | null> {
+  try {
+    const res = await fetch('/api/auth/verified', { cache: 'no-store' })
+    return res.ok ? await res.json() : null
+  } catch {
+    return null
+  }
 }
 
 function Heading({ title, sub, k }: { title: string; sub: string; k: string }) {
@@ -164,6 +212,11 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [trialUsed, setTrialUsed] = useState<'persona' | 'web' | null>(null)
+  const [verify, setVerify] = useState<{ email: string; draftId: number; link?: string } | null>(null)
+  const [resend, setResend] = useState({ sent: 0, until: 0, busy: false, note: null as string | null })
+  const [now, setNow] = useState(0)
+  const savingRef = useRef(false)
+  const finishRef = useRef<() => void>(() => {})
 
   // Al panel con una carga completa: el router del cliente puede tener guardada
   // la versión de /dashboard de antes de terminar el alta (que manda aquí) y
@@ -214,7 +267,9 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
 
   /* Paso 3 → 4: guardar y lanzar la primera medición. */
   async function finish() {
+    if (savingRef.current) return
     if (!prompts.length) return setError(t('Add at least one prompt to track.', 'Añade al menos un prompt que seguir.'))
+    savingRef.current = true
     setSaving(true)
     setError(null)
     const p = profile ?? { brandName: url, description: '', country: '', language: 'en', competitors: [] }
@@ -231,16 +286,124 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
       })
     } catch {
       // Un corte o una actualización recién publicada: el botón no se queda cargando.
+      savingRef.current = false
       setSaving(false)
       return setError(t('We could not save it. Check your connection and try again.', 'No hemos podido guardarlo. Revisa la conexión y vuelve a intentarlo.'))
     }
+    savingRef.current = false
     setSaving(false)
     if ('error' in res) return setError(res.error)
+    if ('verify' in res) {
+      // Ya estaba esperando y ha pulsado el botón: aún no ha llegado la confirmación.
+      if (verify) setResend((r) => ({ ...r, note: t("We haven't received your confirmation yet. Open the link in the email.", 'Aún no nos ha llegado tu confirmación. Abre el enlace del correo.') }))
+      setVerify({ email: res.email, draftId: res.draftId, link: res.link ?? verify?.link })
+      return
+    }
+    writePending(null)
+    setVerify(null)
     if (res.trialUsed) {
       setTrialUsed(res.trialUsed)
       return setStep('sin-prueba')
     }
     setStep('setup')
+  }
+
+  useEffect(() => {
+    finishRef.current = () => void finish()
+  })
+
+  /* Al abrir el alta: si otra pestaña ya la terminó, al panel; si quedó una pendiente de
+     confirmar el correo de esta misma cuenta y espacio, se recupera. Se pregunta siempre:
+     la pestaña que abre el enlace del correo puede cargar justo cuando la otra termina
+     el alta y borra lo pendiente, y no debe quedarse en el primer paso como si nada. */
+  useEffect(() => {
+    const saved = readPending()
+    let alive = true
+    void checkVerified().then((r) => {
+      if (!alive || !r) return
+      if (r.finished) {
+        writePending(null)
+        return goToDashboard()
+      }
+      if (!saved) return
+      if (r.email !== saved.email || r.draft !== saved.draftId) return writePending(null)
+      setUrl(saved.url)
+      setProfile(saved.profile)
+      setAnalyzedFor(saved.analyzedFor)
+      setCompetitors(saved.competitors)
+      setPrompts(saved.prompts)
+      setLeftovers(saved.leftovers ?? [])
+      setPromptsFor(saved.promptsFor)
+      setStep('prompts')
+      setVerify({ email: saved.email, draftId: saved.draftId })
+    })
+    return () => {
+      alive = false
+    }
+  }, [goToDashboard])
+
+  /* Mientras espera la confirmación: guarda lo elegido y pregunta cada 4 segundos (y al volver a la pestaña). */
+  useEffect(() => {
+    if (!verify) return
+    writePending({ email: verify.email, draftId: verify.draftId, savedAt: Date.now(), url, profile, analyzedFor, competitors, prompts, leftovers, promptsFor })
+  }, [verify, url, profile, analyzedFor, competitors, prompts, leftovers, promptsFor])
+
+  const waitingFor = verify?.email
+  useEffect(() => {
+    if (!waitingFor) return
+    let done = false
+    const check = async () => {
+      if (done || savingRef.current) return
+      const r = await checkVerified()
+      if (!done && r?.verified) {
+        done = true
+        finishRef.current()
+      }
+    }
+    void check()
+    const iv = setInterval(check, VERIFY_POLL_MS)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void check()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      done = true
+      clearInterval(iv)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [waitingFor])
+
+  /* Cuenta atrás del botón «Reenviar el correo». */
+  useEffect(() => {
+    if (!resend.until) return
+    const iv = setInterval(() => {
+      const n = Date.now()
+      setNow(n)
+      if (n >= resend.until) clearInterval(iv)
+    }, 1000)
+    return () => clearInterval(iv)
+  }, [resend.until])
+  const cooldown = Math.max(0, Math.ceil((resend.until - now) / 1000))
+
+  async function resendEmail() {
+    if (resend.busy || cooldown > 0 || resend.sent >= MAX_RESENDS) return
+    setResend((r) => ({ ...r, busy: true, note: null }))
+    try {
+      const res = await resendVerificationAction()
+      const n = Date.now()
+      setNow(n)
+      if ('error' in res) {
+        setResend((r) => ({ ...r, busy: false, note: res.error, until: res.wait ? n + res.wait * 1000 : r.until, sent: res.limit ? MAX_RESENDS : r.sent }))
+      } else if (res.verified) {
+        setResend((r) => ({ ...r, busy: false }))
+        finishRef.current()
+      } else {
+        setResend((r) => ({ sent: r.sent + 1, until: n + 60_000, busy: false, note: t('Sent. Check your inbox and your spam folder.', 'Enviado. Mira en tu bandeja de entrada y en la carpeta de spam.') }))
+        if (res.link) setVerify((v) => (v ? { ...v, link: res.link } : v))
+      }
+    } catch {
+      setResend((r) => ({ ...r, busy: false, note: t('We could not send it. Try again in a moment.', 'No hemos podido enviarlo. Vuelve a intentarlo en un momento.') }))
+    }
   }
 
   return (
@@ -399,9 +562,51 @@ export function Onboarding({ initialWeb = '', limit = TRIAL_LIMIT }: { initialWe
               </>
             )}
           </Card>
+          {verify && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="anim-rise mt-5 rounded-[22px] border border-white bg-white/90 px-6 py-5 shadow-[inset_3px_0_0_#d97706,0_24px_60px_-30px_rgba(11,29,33,0.35)]"
+            >
+              <p className="text-[15px] font-bold text-ink">{t('Confirm your email to start tracking', 'Confirma tu correo para empezar a medir')}</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-ink-2">
+                {t('We sent a link to ', 'Te hemos enviado un enlace a ')}
+                <span className="font-semibold text-ink">{verify.email}</span>
+                {t('. Open it and then come back here: we will continue on our own.', '. Ábrelo y vuelve aquí: seguiremos solos.')}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button
+                  type="button"
+                  onClick={resendEmail}
+                  disabled={resend.busy || cooldown > 0 || resend.sent >= MAX_RESENDS}
+                  className="h-9 rounded-full border border-line bg-white px-4 text-[13px] font-semibold text-ink transition-colors hover:border-brand-2 disabled:text-faint disabled:hover:border-line"
+                >
+                  {resend.busy
+                    ? t('Sending…', 'Enviando…')
+                    : cooldown > 0
+                      ? t(`Resend the email (${cooldown} s)`, `Reenviar el correo (${cooldown} s)`)
+                      : t('Resend the email', 'Reenviar el correo')}
+                </button>
+                <span className="flex items-center gap-2 text-[12.5px] text-mute">
+                  <span className="spin h-3 w-3 rounded-full border-2 border-line border-t-brand-2" aria-hidden="true" />
+                  {t('Waiting for your confirmation', 'Esperando tu confirmación')}
+                </span>
+              </div>
+              {(resend.note || resend.sent >= MAX_RESENDS) && (
+                <p className="mt-2 text-[12.5px] text-mute">
+                  {resend.note ?? t('You have reached the resend limit. Check your spam folder or write to us.', 'Has llegado al límite de reenvíos. Mira en la carpeta de spam o escríbenos.')}
+                </p>
+              )}
+              {verify.link && (
+                <a href={verify.link} className="mt-2 block text-[12.5px] font-semibold text-ink underline underline-offset-2">
+                  {t('Email is not set up here: open the confirmation link', 'El correo no está configurado aquí: abre el enlace de confirmación')}
+                </a>
+              )}
+            </div>
+          )}
           {error && <p className="mt-4 text-center text-[14px] font-medium text-bad">{error}</p>}
           <PrimaryButton onClick={finish} disabled={loadingPrompts || saving || !prompts.length}>
-            {saving ? t('Saving…', 'Guardando…') : t('Finish setup', 'Terminar el alta')}
+            {saving ? t('Saving…', 'Guardando…') : verify ? t("I've confirmed it, continue", 'Ya lo he confirmado, seguir') : t('Finish setup', 'Terminar el alta')}
           </PrimaryButton>
           <BackLink onClick={() => setStep('competitors')} />
         </div>

@@ -7,7 +7,6 @@ import { publicFetch, readCapped } from './netguard'
 // Ayudas con IA para el alta y las sugerencias. Nada de esto mide: solo
 // prepara. La medición vive en engines + extract y no se contamina con esto.
 
-const SMART = process.env.PLACTON_SMART_MODEL || 'gpt-5.6-sol'
 // Luna: con búsqueda en internet cumple el «Zero Data Retention» de la cuenta de
 // OpenRouter (gpt-5.4-mini con búsqueda no, y el onboarding fallaba en producción).
 const FAST = process.env.PLACTON_FAST_MODEL || 'gpt-5.6-luna'
@@ -192,6 +191,9 @@ export interface SuggestedPrompt {
   why: string
 }
 
+/** Tipo de pregunta: solo sirve para intercalarlas; no se guarda. */
+const PROMPT_KINDS = ['categoria', 'calificativo', 'comparativa'] as const
+
 const PROMPTS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -202,15 +204,59 @@ const PROMPTS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['text', 'topic', 'why'],
+        required: ['text', 'kind', 'topic', 'why'],
         properties: {
-          text: { type: 'string', description: 'La pregunta tal cual la escribiría una persona en un chat de IA' },
-          topic: { type: 'string', description: 'Tema corto de 1 a 3 palabras para agrupar (p. ej. «Precios», «Comparativas», «Cerca de mí»)' },
+          text: { type: 'string', description: 'Pregunta corta y general (de 3 a 10 palabras) tal cual la escribe mucha gente en un chat de IA' },
+          kind: { type: 'string', enum: [...PROMPT_KINDS], description: 'categoria: la categoría a secas; calificativo: la categoría con un calificativo o un servicio concreto; comparativa: «X vs Y» o alternativas a un líder' },
+          topic: { type: 'string', description: 'Tema de 1 a 3 palabras para agrupar: la categoría, un tipo de cliente, precio, comparativas, alternativas o la ciudad' },
           why: { type: 'string', description: 'En una línea, por qué importa aparecer en esta respuesta' },
         },
       },
     },
   },
+}
+
+// Lo que más se pregunta al buscar proveedores es corto y general («What is the
+// best CRM software?»). Las preguntas largas y de nicho las hace poca gente y la
+// medición dice poco de la marca, así que se piden cortas, y en código se
+// intercalan los tipos y se mandan al final las que se alarguen: el alta
+// preselecciona las primeras y tienen que traer de todo.
+const SUGGEST_INSTRUCTIONS = `Escribes las preguntas que MÁS GENTE hace a ChatGPT, Claude, Gemini o Google cuando busca proveedores de lo que vende una empresa. Vigilaremos qué marcas recomienda la IA en cada respuesta, así que valen las búsquedas frecuentes y generales, nunca los casos raros.
+
+Cómo son:
+- CORTAS: de 3 a 10 palabras, una sola idea, sin subordinadas ni listas de requisitos.
+- GENERALES: la categoría con el nombre que usa la gente («CRM software», «project management tools», «personal injury lawyer», «gafas de sol»), no el eslogan ni la jerga de la marca.
+- Su respuesta natural es una lista de marcas o empresas: «best…», «top…», «which… should I use?», «alternatives to…», «X vs Y».
+- Más o menos la mitad como pregunta completa («What is the best CRM software?», «Which payroll software is best for small businesses?») y el resto como búsqueda corta («Best project management tools for small teams»).
+
+Tipos («kind») y reparto aproximado para el número que se pida:
+1. «categoria», como mucho 3: la categoría principal a secas, de formas de verdad distintas: «What is the best CRM software?», «Top payroll companies».
+2. «calificativo», casi la mitad: la categoría con UN calificativo de los más buscados (para pequeñas empresas, para startups, para agencias, barato, gratis, para empresas grandes, para mujer, de lujo…) o un servicio concreto de la categoría: «Best project management tools for small teams», «Cheap CRM for startups», «Best car accident lawyers in Houston».
+3. «comparativa», unas 3 de cada 10: «X vs Y» y alternativas, solo con líderes que todo el mundo conoce en el país (software, productos, marcas o cadenas grandes; de la lista de competidores o no): «Best Jira alternatives», «Asana vs Monday.com», «Is ClickUp better than Asana?». Nadie busca alternativas a una empresa pequeña ni a un despacho o tienda de barrio. En servicios locales (abogados, clínicas, agencias, reformas…) nadie compara por nombre: ahí ninguna «comparativa», haz más «calificativo».
+
+Lugar: si es un negocio local (atiende en una ciudad o zona), TODAS menos una o dos llevan su ciudad principal (la región, como mucho en una), porque sin ella la IA recomienda a gente de otros sitios: «Who are the best personal injury lawyers in Houston?», «Affordable car accident lawyer in Houston», «Top marketing agencies in San Diego». Si vende en todo un país, nombra el país como mucho en una o dos y solo si suena natural. Software o tienda online sin zona: sin lugar.
+
+Prohibido:
+- Preguntas largas o con varias condiciones («…for a 50-person team with SSO and GitHub integration»).
+- Nicho extremo, casos personales, cifras concretas, funciones técnicas, migraciones, dudas de cómo se hace algo y cualquier pregunta cuya respuesta no recomiende proveedores.
+- Comparativas o alternativas entre negocios locales («Arash Law vs Wilshire Law Firm», «Alternatives to Smith Dental Clinic»): con despachos, clínicas, agencias o tiendas de una ciudad, cero «comparativa».
+- Mencionar la marca analizada: contaminaría la medición. Los competidores sí, en comparativas y alternativas.
+- Duplicados o variantes triviales: cambiar solo un sinónimo («lawyers», «attorneys», «law firms») o el orden no cuenta como otra pregunta.
+- Rayas largas (—).
+
+Antes de responder, repasa la lista: si dos preguntas piden lo mismo con otras palabras (un sinónimo, la ciudad por su región o su provincia, otro orden), cambia una por otro servicio u otro calificativo.
+Dentro de cada tipo, de la más buscada a la menos; la primera «categoria» es la categoría principal a secas (con la ciudad si es local).
+Escribe «text» en el idioma indicado, como lo escribiría alguien de ese mercado (en español: «¿Cuál es el mejor CRM?», «Mejores abogados de accidentes en Madrid», «Alternativas a Holded»).`
+
+/** Más de esto ya no es una pregunta corta: se manda al final de la lista. */
+const MAX_SUGGESTED_WORDS = 12
+
+/** Intercala los tipos (categoría, calificativo, comparativa, categoría…) respetando el orden de cada uno. */
+function interleaveKinds<T extends { kind?: string }>(items: T[]): T[] {
+  const groups = PROMPT_KINDS.map((k) => items.filter((p) => p.kind === k))
+  const out: T[] = []
+  for (let i = 0; groups.some((g) => i < g.length); i++) for (const g of groups) if (g[i]) out.push(g[i])
+  return [...out, ...items.filter((p) => !out.includes(p))]
 }
 
 export async function suggestPrompts(
@@ -219,7 +265,7 @@ export async function suggestPrompts(
   uiLang: 'en' | 'es' = 'en',
 ): Promise<SuggestedPrompt[]> {
   const input = [
-    `Marca: ${ctx.brandName}${ctx.domain ? ` (${ctx.domain})` : ''}`,
+    `Marca (no la nombres): ${ctx.brandName}${ctx.domain ? ` (${ctx.domain})` : ''}`,
     `Qué vende: ${ctx.description}`,
     `Mercado: ${ctx.country}. Idioma de las preguntas («text»): ${ctx.language}`,
     `Idioma de «topic» y «why»: ${uiLang === 'es' ? 'español' : 'inglés'}`,
@@ -231,26 +277,28 @@ export async function suggestPrompts(
     .filter(Boolean)
     .join('\n')
 
-  const { data } = await structured<{ prompts: SuggestedPrompt[] }>({
-    model: SMART,
-    instructions: `Reconstruyes cómo pregunta la GENTE REAL a ChatGPT, Claude o Google cuando busca lo que vende una empresa. Son las preguntas cuya respuesta queremos vigilar.
-
-Reglas:
-- Escribe como un humano con prisa: frases naturales, sin jerga de marketing ni palabras clave apelmazadas.
-- Cubre todo el recorrido de compra: descubrir opciones («mejores…», «recomiéndame…»), comparar («X o Y», «alternativas a…»), decidir (precio, contratar, cerca de mí) y problemas previos a la compra.
-- NO menciones nunca la marca analizada: contaminaría la medición. Sí puedes nombrar competidores en preguntas de comparación.
-- Ancla al país o la ciudad cuando tenga sentido, pero no en todas.
-- Nada de duplicados ni variantes triviales.`,
+  // Luna con razonamiento bajo: con estas reglas cumple igual que con «medium»
+  // (probado con 5 webs) y tarda 6 a 8 s en vez de 10 a 20. ≈0,001 $ por tanda.
+  const { data } = await structured<{ prompts: (SuggestedPrompt & { kind?: string })[] }>({
+    model: FAST,
+    instructions: SUGGEST_INSTRUCTIONS,
     input,
-    effort: 'medium',
+    effort: 'low',
     schema: { name: 'prompt_set', schema: PROMPTS_SCHEMA },
-    maxOutputTokens: 6000,
+    maxOutputTokens: 5000,
   })
 
   const seen = new Set(ctx.existing.map((e) => e.toLowerCase()))
   const brandLower = ctx.brandName.toLowerCase()
-  return (data.prompts ?? [])
-    .map((p) => ({ text: p.text.trim(), topic: (p.topic || (uiLang === 'es' ? 'General' : 'General')).trim().slice(0, 40), why: (p.why ?? '').trim().slice(0, 200) }))
+  const words = (s: string) => s.split(/\s+/).filter(Boolean).length
+  const clean = (data.prompts ?? [])
+    .map((p) => ({
+      // Sin rayas largas en lo que se enseña: «Jira or Linear—which…» → «Jira or Linear, which…».
+      text: p.text.replace(/\s*—\s*/g, ', ').replace(/\s+/g, ' ').trim(),
+      kind: p.kind,
+      topic: (p.topic || 'General').trim().slice(0, 40),
+      why: (p.why ?? '').replace(/\s*—\s*/g, ', ').trim().slice(0, 200),
+    }))
     .filter((p) => {
       const k = p.text.toLowerCase()
       if (!p.text || seen.has(k)) return false
@@ -258,5 +306,8 @@ Reglas:
       seen.add(k)
       return true
     })
-    .slice(0, count)
+  // Las cortas primero, con los tipos intercalados; las largas solo rellenan si faltan.
+  const short = clean.filter((p) => words(p.text) <= MAX_SUGGESTED_WORDS)
+  const long = clean.filter((p) => words(p.text) > MAX_SUGGESTED_WORDS)
+  return [...interleaveKinds(short), ...long].slice(0, count).map(({ text, topic, why }) => ({ text, topic, why }))
 }

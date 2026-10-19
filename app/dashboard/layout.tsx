@@ -14,6 +14,13 @@ export const dynamic = 'force-dynamic'
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const { user, workspace: ws } = await requireCtx()
   const { lang, t } = await getT()
+  // Visita al panel (una escritura cada 10 minutos como mucho): la segunda medición
+  // de la prueba gratis solo se hace a quien vuelve. Si falla, el panel sigue igual.
+  try {
+    repo.recordVisit(ws)
+  } catch (err) {
+    console.error('[placton] visita al panel', err)
+  }
   const access = repo.accessOf(ws)
   const used = repo.activePromptCount(ws.id)
   const limit = repo.promptLimit(ws)

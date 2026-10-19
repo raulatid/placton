@@ -1,6 +1,6 @@
 'use server'
 
-import { clientIp, recordSignup, signupAllowed } from '@/lib/abuse'
+import { clientIp, isDisposableEmail, recordSignup, signupAllowed } from '@/lib/abuse'
 import { redirect } from 'next/navigation'
 import {
   consumePasswordReset,
@@ -11,6 +11,7 @@ import {
   hashPassword,
   passwordProblem,
   safeNext,
+  sendVerificationEmail,
   startSession,
   verifyPassword,
 } from '@/lib/auth'
@@ -57,6 +58,14 @@ export async function registerAction(_: FormState, fd: FormData): Promise<FormSt
   if (await throttled('signup')) return { error: t('Too many attempts. Try again in a few minutes.', 'Demasiados intentos. Prueba de nuevo en unos minutos.'), fields }
   if (!firstName) return { error: t('Please enter your first name.', 'Escribe tu nombre.'), fields }
   if (!EMAIL_RE.test(email)) return { error: t('That email does not look valid.', 'Ese correo no parece válido.'), fields }
+  if (isDisposableEmail(email))
+    return {
+      error: t(
+        'Temporary email addresses are not accepted. Use your work or personal email.',
+        'No admitimos correos temporales. Usa tu correo de trabajo o personal.',
+      ),
+      fields,
+    }
   const pwProblem = passwordProblem(password)
   if (pwProblem) return { error: t('Your password needs at least 8 characters.', pwProblem), fields }
   if (repo.userByEmail(email)) return { error: t('There is already an account with that email. Log in instead.', 'Ya hay una cuenta con ese correo. Entra con ella.'), fields }
@@ -67,18 +76,27 @@ export async function registerAction(_: FormState, fd: FormData): Promise<FormSt
   recordSignup(ip)
   const user = repo.createUser({ email, firstName, lastName, passwordHash: await hashPassword(password) })
   await startSession(user.id)
-  void sendEmail({
-    to: user.email,
-    subject: t('Your Placton account is ready', 'Tu cuenta de Placton está lista'),
-    kind: 'welcome',
-    title: t(`Hi ${user.firstName}`, `Hola, ${user.firstName}`),
-    body: t(
-      'Your account is ready. Finish setting up your workspace and in a few minutes you will see what AI says about your brand.',
-      'Ya tienes tu cuenta. Termina el alta de tu espacio y en unos minutos verás qué dicen las IA de tu marca.',
-    ),
-    cta: { label: t('Open Placton', 'Ir a Placton'), url: `${appUrl()}/dashboard` },
-    lang,
-  })
+  // Una invitación enviada a este mismo correo ya demuestra que es suyo. Si no, se
+  // manda el correo de confirmación (hace de bienvenida): sin confirmarlo no arranca
+  // la primera medición.
+  const inv = invite ? repo.inviteByToken(invite) : null
+  if (inv && !inv.acceptedAt && inv.email.trim().toLowerCase() === user.email) {
+    repo.markEmailVerified(user.id)
+    void sendEmail({
+      to: user.email,
+      subject: t('Your Placton account is ready', 'Tu cuenta de Placton está lista'),
+      kind: 'welcome',
+      title: t(`Hi ${user.firstName}`, `Hola, ${user.firstName}`),
+      body: t(
+        'Your account is ready. Finish setting up your workspace and in a few minutes you will see what AI says about your brand.',
+        'Ya tienes tu cuenta. Termina el alta de tu espacio y en unos minutos verás qué dicen las IA de tu marca.',
+      ),
+      cta: { label: t('Open Placton', 'Ir a Placton'), url: `${appUrl()}/dashboard` },
+      lang,
+    })
+  } else {
+    void sendVerificationEmail(user, lang, { invite: Boolean(invite) })
+  }
   if (invite) redirect(`/invite/${encodeURIComponent(invite)}`)
   redirect(web ? `/onboarding?web=${encodeURIComponent(web)}` : '/onboarding')
 }
@@ -147,6 +165,8 @@ export async function resetAction(_: FormState, fd: FormData): Promise<FormState
   const userId = consumePasswordReset(token)
   if (!userId) return { error: t('This link has expired or was already used. Request a new one.', 'El enlace ha caducado o ya se usó. Pide otro.') }
   repo.updateUser(userId, { passwordHash: await hashPassword(password) })
+  // El enlace llegó a su correo: eso ya lo confirma.
+  repo.markEmailVerified(userId)
   endAllSessions(userId)
   await startSession(userId)
   redirect('/dashboard')

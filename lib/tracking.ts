@@ -70,7 +70,6 @@ interface Cell {
   platform: Platform
 }
 
-/** Celdas del día que aún no tienen respuesta válida. */
 /**
  * Cada cuántos días se mide cada prompt en cada plataforma (7 = semanal). Con
  * búsqueda real en internet cada respuesta cuesta ~0,01 $; medir a diario hundía
@@ -78,12 +77,131 @@ interface Cell {
  */
 export const MEASURE_EVERY_DAYS = Math.max(1, Number(process.env.PLACTON_MEASURE_DAYS) || 7)
 
-function pendingCells(ws: Workspace, day: string): Cell[] {
+/**
+ * Desde qué día cuenta una respuesta: `done`, las del propio espacio que ya no se
+ * vuelven a medir; `share`, las de otros espacios que se pueden reutilizar.
+ */
+interface MeasureWindow {
+  done: string
+  share: string
+}
+
+/** La ventana normal: la semana que acaba hoy. */
+function weekWindow(day: string): MeasureWindow {
+  const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
+  return { done: since, share: since }
+}
+
+/* ───────────── Prueba gratis: dos mediciones automáticas como mucho ─────────────
+ * Cada medición de una prueba cuesta ≈0,46 $ (10 prompts × 5 IA). En vez de la
+ * semanal del día 7 (cuando la prueba ya se acaba), la prueba tiene:
+ *   1. La medición del alta.
+ *   2. UNA segunda medición, a partir del día 4 (día de la primera medición + 3,
+ *      en días naturales de Madrid) y solo si la persona ha vuelto al panel después
+ *      de la primera: 6 horas después de que terminara, o ya otro día.
+ * Y un solo «Medir ahora» en toda la prueba. Los espacios de pago no cambian. */
+
+/** La segunda medición, como pronto este número de días naturales después de la primera. */
+export const TRIAL_SECOND_AFTER_DAYS = 3
+/** Ha vuelto si entra al panel estas horas después de terminar la primera medición (o ya otro día). */
+export const TRIAL_RETURN_GAP_MS = 6 * 3_600_000
+/** «Medir ahora» en toda la prueba. */
+export const TRIAL_MANUAL_RUNS = 1
+
+const AUTO_TRIGGERS = "trigger IN ('alta', 'diario')"
+
+export interface TrialMeasurements {
+  /**
+   * La primera medición terminada bien, por orden de creación: la del alta (o su
+   * reintento automático). Si el alta falló y la persona la rehízo con «Medir
+   * ahora», cuenta esa, y una automática posterior ya es la segunda.
+   */
+  first: { id: number; day: string; finishedAt: string } | null
+  /** ¿Ya terminó bien la segunda? */
+  second: boolean
+  /** Día en que empezó la segunda (aunque fallara y se esté reintentando). */
+  secondStartDay: string | null
+}
+
+/** Las mediciones automáticas de una prueba, leídas de `runs`. */
+export function trialMeasurements(workspaceId: number): TrialMeasurements {
+  const first = one<{ id: number; day: string; finishedAt: string }>(
+    `SELECT id, day, COALESCE(finishedAt, startedAt) AS finishedAt FROM runs WHERE workspaceId = ? AND status = 'ok' ORDER BY id LIMIT 1`,
+    [workspaceId],
+  )
+  if (!first) return { first: null, second: false, secondStartDay: null }
+  // Lo que se relance el mismo día o al siguiente (una medición cortada por un
+  // reinicio) sigue siendo la primera; la segunda empieza como pronto el día 4.
+  const from = addDays(first.day, TRIAL_SECOND_AFTER_DAYS)
+  const later = one<{ start: string | null; ok: number | null }>(
+    `SELECT MIN(day) AS start, MAX(status = 'ok') AS ok FROM runs WHERE workspaceId = ? AND ${AUTO_TRIGGERS} AND id > ? AND day >= ?`,
+    [workspaceId, first.id, from],
+  )
+  return { first, second: Boolean(later?.ok), secondStartDay: later?.start ?? null }
+}
+
+/** ¿Ha vuelto al panel después de la primera medición? */
+export function returnedAfter(lastVisitAt: string | null | undefined, firstFinishedAt: string): boolean {
+  if (!lastVisitAt) return false
+  const visit = new Date(lastVisitAt)
+  const end = new Date(firstFinishedAt)
+  if (Number.isNaN(visit.getTime()) || Number.isNaN(end.getTime())) return false
+  return visit.getTime() - end.getTime() >= TRIAL_RETURN_GAP_MS || today(visit) > today(end)
+}
+
+export type TrialStep =
+  | { run: true; why: 'primera' | 'segunda' }
+  | { run: false; why: 'correo' | 'antes-del-dia-4' | 'no-ha-vuelto' | 'hecha' }
+
+/**
+ * Lo que toca hoy a una prueba gratis en la medición automática. Sin base de
+ * datos ni reloj: todo entra como datos, así se puede probar con fechas.
+ *  - Sin primera medición terminada: se (re)intenta, salvo que el correo esté sin confirmar.
+ *  - Con las dos hechas: nada más en toda la prueba.
+ *  - Con la primera: la segunda a partir del día 4 y solo si ha vuelto al panel.
+ */
+export function trialStep(s: { day: string; m: TrialMeasurements; lastVisitAt: string | null | undefined; emailPending: boolean }): TrialStep {
+  if (!s.m.first) return s.emailPending ? { run: false, why: 'correo' } : { run: true, why: 'primera' }
+  if (s.m.second) return { run: false, why: 'hecha' }
+  if (s.day < addDays(s.m.first.day, TRIAL_SECOND_AFTER_DAYS)) return { run: false, why: 'antes-del-dia-4' }
+  if (!returnedAfter(s.lastVisitAt, s.m.first.finishedAt)) return { run: false, why: 'no-ha-vuelto' }
+  return { run: true, why: 'segunda' }
+}
+
+/** «Medir ahora» que le quedan a una prueba gratis; null = sin límite (de pago). Las que fallaron enteras no cuentan. */
+export function trialManualRunsLeft(ws: Workspace): number | null {
+  if (!repo.isFreeTrial(ws)) return null
+  const used = one<{ n: number }>("SELECT COUNT(*) AS n FROM runs WHERE workspaceId = ? AND trigger = 'manual' AND status IN ('ok', 'corriendo')", [ws.id])?.n ?? 0
+  return Math.max(0, TRIAL_MANUAL_RUNS - used)
+}
+
+/**
+ * Freno de startRun para una prueba gratis (también cubre las mediciones que se
+ * reanudan tras un reinicio). La segunda medición vuelve a medirlo todo: su
+ * ventana empieza el día en que empezó ella, y solo reutiliza respuestas de otros
+ * espacios posteriores a la primera (si no, la semana de la primera la daría por hecha).
+ */
+function trialGate(ws: Workspace, trigger: Run['trigger'], day: string): { window: MeasureWindow } | { reason: string } {
+  if (trigger === 'alta') return { window: weekWindow(day) }
+  if (trigger === 'manual') {
+    return trialManualRunsLeft(ws) === 0 ? { reason: 'La prueba gratis incluye un «Medir ahora» y ya lo has usado' } : { window: weekWindow(day) }
+  }
+  const m = trialMeasurements(ws.id)
+  // Sin primera medición terminada (el alta falló o se cortó): se completa la primera.
+  if (!m.first) return { window: weekWindow(day) }
+  if (m.second) return { reason: 'La prueba gratis ya tiene sus dos mediciones' }
+  if (day < addDays(m.first.day, TRIAL_SECOND_AFTER_DAYS)) return { reason: 'La segunda medición de la prueba es a partir del cuarto día' }
+  const week = weekWindow(day)
+  const afterFirst = addDays(m.first.day, 1)
+  return { window: { done: m.secondStartDay ?? day, share: afterFirst > week.share ? afterFirst : week.share } }
+}
+
+/** Celdas que aún no tienen respuesta válida desde `since` (por defecto, en la semana). */
+function pendingCells(ws: Workspace, day: string, since = weekWindow(day).done): Cell[] {
   const prompts = repo.promptsOf(ws.id, true).slice(0, repo.promptLimit(ws))
   const engines = enginesFor(ws.engines)
     .map((id) => platformById(id))
     .filter((p): p is Platform => Boolean(p?.available))
-  const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
   const done = new Set(
     all<{ promptId: number; engine: string }>('SELECT promptId, engine FROM answers WHERE workspaceId = ? AND day BETWEEN ? AND ? AND error IS NULL', [
       ws.id,
@@ -108,7 +226,13 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
   if (!repo.accessOf(ws).ok) return { runId: null, reason: 'La suscripción no está activa' }
 
   const day = today()
-  const cells = pendingCells(ws, day)
+  let window = weekWindow(day)
+  if (repo.isFreeTrial(ws)) {
+    const gate = trialGate(ws, trigger, day)
+    if ('reason' in gate) return { runId: null, reason: gate.reason }
+    window = gate.window
+  }
+  const cells = pendingCells(ws, day, window.done)
   if (!cells.length) {
     const noPrompts = repo.activePromptCount(ws.id) === 0
     return { runId: null, reason: noPrompts ? 'No hay prompts activos' : 'Esta semana ya está todo medido' }
@@ -123,7 +247,7 @@ export function startRun(workspaceId: number, trigger: Run['trigger']): { runId:
     nowIso(),
     nowIso(),
   ])
-  void execute(ws, runId, day, cells, trigger)
+  void execute(ws, runId, day, cells, trigger, window.share)
   return { runId }
 }
 
@@ -160,10 +284,11 @@ type SharedAnswer = AskResult & { sourceId: number; companies: ExtractedCompany[
  * repite la lectura de la IA, que solo ve la pregunta y la respuesta: se
  * reutiliza la de la original y en cada espacio solo se cruzan sus marcas (en
  * código). Así la misma respuesta da las mismas menciones en todos los espacios.
+ * `since` es el primer día que vale (la semana, o después de la primera medición
+ * en la segunda de una prueba gratis, para que no repita la misma muestra).
  */
-function sharedAnswer(key: string, engine: string, wsId: number, day: string): SharedAnswer | null {
+function sharedAnswer(key: string, engine: string, wsId: number, day: string, since: string): SharedAnswer | null {
   if (process.env.PLACTON_SHARE_ANSWERS === '0') return null
-  const since = addDays(day, -(MEASURE_EVERY_DAYS - 1))
   const a = one<{ id: number; reusedFrom: number | null; text: string; model: string; empty: number; searchQueries: string; companies: string | null }>(
     // Solo respuestas originales (pagadas esa semana): reutilizar una copia la iría arrastrando semana tras semana.
     "SELECT id, reusedFrom, text, model, empty, searchQueries, companies FROM answers WHERE promptKey = ? AND engine = ? AND error IS NULL AND reusedFrom IS NULL AND (empty = 0 OR engine = 'google') AND day BETWEEN ? AND ? AND workspaceId <> ? ORDER BY day DESC, id DESC LIMIT 1",
@@ -184,7 +309,7 @@ function sharedAnswer(key: string, engine: string, wsId: number, day: string): S
   return { text: a.text, citations, searchQueries, model: a.model, costUsd: 0, empty: Boolean(a.empty), sourceId: a.reusedFrom ?? a.id, companies }
 }
 
-async function execute(ws: Workspace, runId: number, day: string, cells: Cell[], trigger: Run['trigger']) {
+async function execute(ws: Workspace, runId: number, day: string, cells: Cell[], trigger: Run['trigger'], shareSince: string) {
   const brands = repo.trackedBrands(ws)
   let done = 0
   let costUsd = 0
@@ -198,7 +323,7 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
     const keyOf = (c: Cell) => promptKey(c.prompt.text, ws.country, ws.language)
     const shared = new Map<Cell, SharedAnswer>()
     for (const c of cells) {
-      const hit = sharedAnswer(keyOf(c), c.platform.id, ws.id, day)
+      const hit = sharedAnswer(keyOf(c), c.platform.id, ws.id, day, shareSince)
       if (hit) shared.set(c, hit)
     }
 
@@ -363,15 +488,26 @@ async function execute(ws: Workspace, runId: number, day: string, cells: Cell[],
   }
 }
 
+/** ¿Le toca hoy la medición automática a este espacio? */
+export function dueToday(ws: Workspace, day: string): boolean {
+  // Prueba gratis: sin semanal; la segunda medición solo para quien vuelve (ver trialStep).
+  if (repo.isFreeTrial(ws)) {
+    const m = trialMeasurements(ws.id)
+    // El correo solo frena la primera medición: ni se mira una vez hecha.
+    const emailPending = !m.first && repo.creatorEmailPending(ws)
+    return trialStep({ day, m, lastVisitAt: ws.lastVisitAt, emailPending }).run
+  }
+  // De pago: una medición completa por ventana (semanal): se espera a que pasen los días.
+  return !(ws.lastTrackedDay && ws.lastTrackedDay > addDays(day, -MEASURE_EVERY_DAYS))
+}
+
 /** Lo que llama el programador cada hora: mide los espacios que aún no tienen el día. */
 export async function runDaily(): Promise<{ started: number[]; skipped: number }> {
   const day = today()
   const started: number[] = []
   let skipped = 0
   for (const ws of repo.allWorkspaces()) {
-    // Una medición completa por ventana (semanal): se espera a que pasen los días.
-    const recent = ws.lastTrackedDay && ws.lastTrackedDay > addDays(day, -MEASURE_EVERY_DAYS)
-    if (!ws.onboarded || !repo.accessOf(ws).ok || recent) {
+    if (!ws.onboarded || !repo.accessOf(ws).ok || !dueToday(ws, day)) {
       skipped++
       continue
     }

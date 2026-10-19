@@ -24,22 +24,24 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   ]
   return (
     <div className="flex min-h-screen flex-col bg-[#f1f4f3]">
-      <header className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
+      {/* En el móvil solo caben el logo, el botón de empezar y el idioma: «Entrar» y
+          «Crear cuenta» ya están dentro de cada tarjeta, y nada parte en dos líneas. */}
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:gap-4 sm:px-8">
         <Logo />
-        <nav className="flex items-center gap-1 text-[14px] font-semibold text-ink-2 sm:gap-2">
-          <Link href="/faqs" className="hidden rounded-full px-3 py-1.5 hover:bg-white sm:inline">
+        <nav className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[14px] font-semibold text-ink-2 sm:gap-2">
+          <Link href="/faqs" className="hidden rounded-full px-3 py-1.5 hover:bg-white md:inline">
             {t('FAQs', 'Preguntas')}
           </Link>
-          <Link href="/pricing" className="hidden rounded-full px-3 py-1.5 hover:bg-white sm:inline">
+          <Link href="/pricing" className="hidden rounded-full px-3 py-1.5 hover:bg-white md:inline">
             {t('Pricing', 'Precios')}
           </Link>
-          <Link href="/login" className="rounded-full px-3 py-1.5 hover:bg-white">
+          <Link href="/login" className="hidden rounded-full px-3 py-1.5 hover:bg-white sm:inline">
             {t('Log in', 'Entrar')}
           </Link>
-          <Link href="/signup" className="rounded-full bg-deep px-4 py-1.5 text-white hover:bg-deep-2">
+          <Link href="/signup" className="rounded-full bg-deep px-3.5 py-1.5 text-[13.5px] text-white hover:bg-deep-2 sm:px-4 sm:text-[14px]">
             {t('Get started', 'Empezar')}
           </Link>
-          <LangSwitch className="ml-1" />
+          <LangSwitch className="ml-0.5 sm:ml-1" />
         </nav>
       </header>
       <main className="flex flex-1 flex-col items-center px-4 pb-10 pt-6 sm:pt-12">{children}

@@ -1,11 +1,12 @@
 import 'server-only'
-import { cookieDomain } from './email'
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
+import { appUrl, cookieDomain, sendEmail } from './email'
+import { createHash, createHmac, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { cache } from 'react'
 import { nowIso, one, run } from './db'
+import { makeT, type Lang } from './i18n-shared'
 import * as repo from './repo'
 import type { Role, User, Workspace } from './types'
 
@@ -180,4 +181,98 @@ export function consumePasswordReset(token: string): number | null {
 export function peekPasswordReset(token: string): boolean {
   const row = one<{ expiresAt: string; usedAt: string | null }>('SELECT expiresAt, usedAt FROM password_resets WHERE token = ?', [hashToken(token)])
   return Boolean(row && !row.usedAt && new Date(row.expiresAt).getTime() > Date.now())
+}
+
+/* ───────────── Confirmar el correo ───────────── */
+
+// Quien se registra con contraseña confirma su correo antes de la primera medición
+// (cada una cuesta dinero en API). Google ya lo da por confirmado. El enlace lleva
+// una firma HMAC de la persona, su correo y la caducidad: no se guarda nada en la
+// base y deja de valer si cambia el correo.
+
+const VERIFY_HOURS = 48
+
+function verifySecret(): string {
+  return process.env.PLACTON_EMAIL_SECRET || process.env.CRON_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'placton-local')
+}
+
+function verifySig(secret: string, userId: number, email: string, exp: number): string {
+  return createHmac('sha256', secret).update(`verify:${userId}:${email.trim().toLowerCase()}:${exp}`).digest('base64url').slice(0, 24)
+}
+
+/** ¿Tiene el correo confirmado? (Google cuenta como confirmado). */
+export function isEmailVerified(user: Pick<User, 'emailVerifiedAt' | 'googleId'>): boolean {
+  return Boolean(user.emailVerifiedAt || user.googleId)
+}
+
+/** Enlace firmado para confirmar el correo (caduca en 48 h); null sin clave configurada. */
+export function emailVerifyUrl(user: Pick<User, 'id' | 'email'>): string | null {
+  const secret = verifySecret()
+  if (!secret) return null
+  const exp = Math.floor(Date.now() / 1000) + VERIFY_HOURS * 3600
+  return `${appUrl()}/api/auth/verify/${user.id.toString(36)}.${exp.toString(36)}.${verifySig(secret, user.id, user.email, exp)}`
+}
+
+/** Comprueba el enlace: «expired» solo si la firma es buena pero ya pasó su plazo. */
+export function readEmailVerifyToken(token: string): { status: 'ok' | 'expired'; user: User } | { status: 'invalid' } {
+  const secret = verifySecret()
+  const m = /^([0-9a-z]{1,10})\.([0-9a-z]{1,10})\.([\w-]{24})$/.exec(token)
+  if (!secret || !m) return { status: 'invalid' }
+  const userId = parseInt(m[1], 36)
+  const exp = parseInt(m[2], 36)
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(exp)) return { status: 'invalid' }
+  const user = repo.userById(userId)
+  if (!user) return { status: 'invalid' }
+  const expected = Buffer.from(verifySig(secret, userId, user.email, exp))
+  const got = Buffer.from(m[3])
+  if (expected.length !== got.length || !timingSafeEqual(expected, got)) return { status: 'invalid' }
+  return { status: exp * 1000 < Date.now() ? 'expired' : 'ok', user }
+}
+
+/**
+ * Envía el correo de confirmación en el idioma de la persona. Sin clave para firmar
+ * (no debería pasar en producción) no se bloquea a nadie: se da por confirmado.
+ */
+export async function sendVerificationEmail(user: Pick<User, 'id' | 'email' | 'firstName'>, lang: Lang, opts?: { invite?: boolean }): Promise<{ sent: boolean; url: string | null }> {
+  const url = emailVerifyUrl(user)
+  if (!url) {
+    console.error('[placton] falta PLACTON_EMAIL_SECRET o CRON_SECRET: el correo se da por confirmado sin enlace')
+    repo.markEmailVerified(user.id)
+    return { sent: false, url: null }
+  }
+  const t = makeT(lang)
+  const sent = await sendEmail({
+    to: user.email,
+    subject: t('Confirm your email for Placton', 'Confirma tu correo de Placton'),
+    kind: 'verify',
+    title: user.firstName ? t(`Hi ${user.firstName}, confirm your email`, `Hola, ${user.firstName}: confirma tu correo`) : t('Confirm your email', 'Confirma tu correo'),
+    body: opts?.invite
+      ? t(
+          'Tap the button to confirm that this address is yours and finish creating your account.\n\nThe link expires in 48 hours. If you did not create a Placton account, just ignore this email.',
+          'Pulsa el botón para confirmar que este correo es tuyo y terminar de crear tu cuenta.\n\nEl enlace caduca en 48 horas. Si no has creado una cuenta en Placton, ignora este correo.',
+        )
+      : t(
+          'Tap the button to confirm that this address is yours. As soon as you do, we start measuring what AI says about your brand.\n\nThe link expires in 48 hours. If you did not create a Placton account, just ignore this email.',
+          'Pulsa el botón para confirmar que este correo es tuyo. En cuanto lo hagas, empezamos a medir qué dicen las IA de tu marca.\n\nEl enlace caduca en 48 horas. Si no has creado una cuenta en Placton, ignora este correo.',
+        ),
+    cta: { label: t('Confirm my email', 'Confirmar mi correo'), url },
+    lang,
+  })
+  return { sent, url }
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+/** Página mínima para los enlaces que llegan sin pasar por la app (confirmar el correo, avisos de Google). */
+export function authNoticePage(lang: Lang, title: string, text: string, link?: { label: string; url: string }): Response {
+  const html = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title></head>
+<body style="margin:0;background:#f4f7f6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0c1b1f">
+<div style="max-width:440px;margin:0 auto;padding:64px 20px">
+<div style="font-weight:800;font-size:20px;letter-spacing:-0.02em;margin-bottom:24px">placton</div>
+<div style="background:#fff;border:1px solid #e3e9e7;border-radius:16px;padding:28px">
+<h1 style="font-size:20px;line-height:1.3;margin:0 0 10px">${esc(title)}</h1>
+<p style="font-size:15px;line-height:1.6;color:#33464b;margin:0">${esc(text)}</p>
+${link ? `<a href="${esc(link.url)}" style="display:inline-block;margin-top:20px;background:#0b3b3c;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 20px;border-radius:10px">${esc(link.label)}</a>` : ''}
+</div></div></body></html>`
+  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 }

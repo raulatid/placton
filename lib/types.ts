@@ -13,6 +13,8 @@ export interface User {
   googleId: string | null
   currentWorkspaceId: number | null
   createdAt: string
+  /** Cuándo confirmó su correo (Google lo da por confirmado). */
+  emailVerifiedAt?: string | null
 }
 
 export interface Workspace {
@@ -45,6 +47,8 @@ export interface Workspace {
   pastDueSince?: string | null
   /** Logo subido por el cliente (si no, el icono de su web). */
   logoUpdatedAt?: string | null
+  /** Última visita al panel (para saber qué pruebas gratis vuelven). */
+  lastVisitAt?: string | null
   /** Plan dado a mano desde la administración (no se cobra por Stripe). */
   manualPlan?: boolean
   /** Hasta cuándo dura el plan dado a mano (null = sin fecha de fin). */
